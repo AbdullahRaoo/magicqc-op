@@ -40,7 +40,7 @@ function AppContent() {
       <header className="bg-white border-b-2 border-slate-100 shrink-0 z-50 shadow-sm">
         <div className="w-full px-6 py-1 flex justify-between items-center">
           <div className="flex items-center space-x-4">
-            <img src="/MagicQC logo.png" alt="MagicQC" className="h-16" />
+            <img src="/MagicQC logo.png" alt="MagicQC" className="h-16 bg-white brand-logo-bg rounded-xl px-3 py-1" />
           </div>
 
           <div className="flex items-center gap-6">
