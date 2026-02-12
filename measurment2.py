@@ -2804,8 +2804,11 @@ class LiveKeypointDistanceMeasurer:
         print("[SWITCH] Switched to FRONT side measurement")
         return True
 
-    def transfer_keypoints_to_live(self):
-        """Step 3: Transfer keypoints to live feed using robust method"""
+    def transfer_keypoints_to_live(self, headless=False):
+        """Step 3: Transfer keypoints to live feed using robust method
+        Args:
+            headless: If True, skip interactive prompts (for API-driven measurement)
+        """
         print("\n" + "="*60)
         print("STEP 3: LIVE MEASUREMENT - ROBUST KEYPOINT TRACKING")
         print("="*60)
@@ -2815,10 +2818,16 @@ class LiveKeypointDistanceMeasurer:
         print(f"ENHANCED CORNER DETECTION FOR FIRST {self.corner_keypoints_count} POINTS!")
         print("PAUSE FUNCTION + MOUSE PAN/ZOOM!")
         print("B KEY: Switch between FRONT and BACK sides!")
-        input("Press Enter to start live measurement...")
+        
+        if not headless:
+            input("Press Enter to start live measurement...")
+        else:
+            print("[HEADLESS] Starting measurement automatically...")
         
         cv2.namedWindow("Live Measurement - Robust Tracking", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow("Live Measurement - Robust Tracking", 1200, 800)  # Larger default window
+        # Make window fullscreen for better visibility
+        cv2.setWindowProperty("Live Measurement - Robust Tracking", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        print("[DISPLAY] Camera window set to FULLSCREEN mode - Press ESC or Q to exit")
         
         # Set up mouse callback for zoom and pan
         cv2.setMouseCallback("Live Measurement - Robust Tracking", self.live_mouse_callback)
@@ -2988,7 +2997,8 @@ class LiveKeypointDistanceMeasurer:
             cv2.imshow("Live Measurement - Robust Tracking", display_frame)
             
             key = cv2.waitKey(1) & 0xFF
-            if key == ord('q') or key == ord('Q'):
+            if key == ord('q') or key == ord('Q') or key == 27:  # Q or ESC to quit
+                print("[EXIT] Exiting measurement...")
                 break
             elif key == ord('p') or key == ord('P'):
                 # Toggle pause

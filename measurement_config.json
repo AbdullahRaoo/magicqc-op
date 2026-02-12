@@ -1,8 +1,8 @@
 {
-    "annotation_name": "L",
-    "article_style": "ADD-TS-001",
-    "annotation_json_path": "D:\\RJM\\operatorPannel-main\\temp_annotations\\ADD-TS-001_L.json",
-    "reference_image_path": "D:\\RJM\\operatorPannel-main\\temp_annotations\\ADD-TS-001_L.jpg",
+    "annotation_name": "M",
+    "article_style": "Trouser Baggy Fit",
+    "annotation_json_path": "D:\\RJM\\operatorPannel-main\\temp_annotations\\Trouser Baggy Fit_M_front.json",
+    "reference_image_path": "D:\\RJM\\operatorPannel-main\\temp_annotations\\Trouser Baggy Fit_M.jpg",
     "side": "front",
     "laravel_storage": "D:\\RJM\\magicQC\\public\\storage",
     "results_path": "D:\\RJM\\operatorPannel-main\\storage\\measurement_results"

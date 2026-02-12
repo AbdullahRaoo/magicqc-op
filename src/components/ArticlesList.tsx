@@ -75,6 +75,23 @@ export function ArticlesList() {
   } | null>(null)
   const [isCalibrating, setIsCalibrating] = useState(false)
 
+  // QC Result popup state
+  const [showQCResult, setShowQCResult] = useState(false)
+  const [qcPassed, setQcPassed] = useState(true)
+  const [failedMeasurements, setFailedMeasurements] = useState<{ code: string, measurement: string, expected: number, actual: number }[]>([])
+
+  // Front/Back side measurement tracking
+  const [currentMeasurementSide, setCurrentMeasurementSide] = useState<'front' | 'back' | null>(null)
+  const [frontMeasuredValues, setFrontMeasuredValues] = useState<Record<number, string>>({})
+  const [backMeasuredValues, setBackMeasuredValues] = useState<Record<number, string>>({})
+  const [frontSideComplete, setFrontSideComplete] = useState(false)
+  const [backSideComplete, setBackSideComplete] = useState(false)
+  
+  // QC check tracking for each side
+  const [frontQCChecked, setFrontQCChecked] = useState(false)
+  const [backQCChecked, setBackQCChecked] = useState(false)
+  const [lastQCSide, setLastQCSide] = useState<'front' | 'back' | null>(null)
+
   const { operator } = useAuth()
 
   // Fetch brands on mount
@@ -296,11 +313,17 @@ export function ArticlesList() {
 
   const fetchBrands = async () => {
     try {
+      // Only show brands that have active purchase orders
       const result = await window.database.query<Brand>(
-        'SELECT id, name FROM brands ORDER BY name'
+        `SELECT DISTINCT b.id, b.name 
+         FROM brands b
+         JOIN purchase_orders po ON po.brand_id = b.id
+         WHERE po.status = 'Active'
+         ORDER BY b.name`
       )
       if (result.success && result.data) {
         setBrands(result.data)
+        console.log('[BRANDS] Loaded', result.data.length, 'brands with active purchase orders')
       }
     } catch (err) {
       console.error('Failed to fetch brands:', err)
@@ -758,14 +781,21 @@ export function ArticlesList() {
     if (isNaN(value)) return 'PENDING'
 
     // Use editable tolerances if available, otherwise use spec defaults
+    // Ensure all values are numbers (could be strings from database)
     const tols = editableTols[spec.id]
-    const tolPlus = tols ? (parseFloat(tols.tol_plus) || spec.tol_plus) : spec.tol_plus
-    const tolMinus = tols ? (parseFloat(tols.tol_minus) || spec.tol_minus) : spec.tol_minus
+    const tolPlus = tols ? (parseFloat(tols.tol_plus) || parseFloat(String(spec.tol_plus)) || 0) : (parseFloat(String(spec.tol_plus)) || 0)
+    const tolMinus = tols ? (parseFloat(tols.tol_minus) || parseFloat(String(spec.tol_minus)) || 0) : (parseFloat(String(spec.tol_minus)) || 0)
+    const expectedValue = parseFloat(String(spec.expected_value)) || 0
 
-    const minValid = spec.expected_value - tolMinus
-    const maxValid = spec.expected_value + tolPlus
+    const minValid = expectedValue - tolMinus
+    const maxValid = expectedValue + tolPlus
 
-    return (value >= minValid && value <= maxValid) ? 'PASS' : 'FAIL'
+    const isPass = value >= minValid && value <= maxValid
+
+    // Debug logging
+    console.log(`[STATUS] ${spec.code}: measured=${value}, expected=${expectedValue}, tol±=${tolPlus}, range=[${minValid.toFixed(2)}, ${maxValid.toFixed(2)}] → ${isPass ? 'PASS' : 'FAIL'}`)
+
+    return isPass ? 'PASS' : 'FAIL'
   }
 
   const handleToleranceChange = (specId: number, field: 'tol_plus' | 'tol_minus', value: string) => {
@@ -779,10 +809,12 @@ export function ArticlesList() {
     }))
   }
 
-  const handleStartMeasurement = async () => {
+  const handleStartMeasurement = async (side: 'front' | 'back') => {
     try {
       // Reset state for new measurement session
       setMeasurementComplete(false)
+      setCurrentMeasurementSide(side)
+      setError(null)
 
       // Initialize editable tolerances from specs
       const tols: Record<number, { tol_plus: string; tol_minus: string }> = {}
@@ -809,245 +841,127 @@ export function ArticlesList() {
         return
       }
 
-      console.log('[MEASUREMENT] Fetching annotation from uploaded_annotations for:', articleStyle, 'size:', selectedSize)
+      console.log('[MEASUREMENT] Starting measurement for:', articleStyle, 'size:', selectedSize, 'side:', side)
 
-      // ============== NEW: Fetch from uploaded_annotations table ==============
-      const annotationResult = await window.database.query<{
-        id: number
-        article_id: number
-        article_style: string
-        size: string
-        name: string
-        annotation_data: string  // JSON string
-        image_width: number
-        image_height: number
-      }>(
-        `SELECT id, article_id, article_style, size, name, annotation_data, image_width, image_height
-         FROM uploaded_annotations 
-         WHERE article_style = ? AND size = ?`,
-        [articleStyle, selectedSize]
-      )
-
-      console.log('[MEASUREMENT] Database query result:', annotationResult)
-
-      if (!annotationResult.success) {
-        console.error('[MEASUREMENT] Database query failed:', annotationResult.error)
-        setError(`Database error: ${annotationResult.error || 'Unknown error'}`)
-        return
-      }
-
-      if (!annotationResult.data || annotationResult.data.length === 0) {
-        console.log('[MEASUREMENT] No annotation found in uploaded_annotations table')
-        setError(`No uploaded annotation found for ${articleStyle} size ${selectedSize}. Please upload annotation via the web dashboard.`)
-        return
-      }
-
-      const dbAnnotation = annotationResult.data[0]
-      console.log('[MEASUREMENT] Found uploaded annotation:', dbAnnotation.name, 'ID:', dbAnnotation.id)
-      console.log('[MEASUREMENT] Image dimensions:', dbAnnotation.image_width, 'x', dbAnnotation.image_height)
-
-      // Parse annotation_data JSON - use 'any' because format varies
-      let annotationData: {
-        keypoints: any  // Can be string, array of objects, or array of arrays
-        target_distances?: Record<string, number> | string
-        placement_box?: any  // Can be string or object
-      }
+      // ============== Try to fetch annotation + image from database ==============
+      let keypointsPixels: number[][] = []
+      let targetDistances: Record<string, number> = {}
+      let placementBox: number[] | null = null
+      let imageData: string | null = null
+      let imageMimeType = 'image/jpeg'
+      let imageWidth = 5472  // Default to camera native resolution
+      let imageHeight = 2752
+      let useLocalFiles = false
 
       try {
-        annotationData = typeof dbAnnotation.annotation_data === 'string'
-          ? JSON.parse(dbAnnotation.annotation_data)
-          : dbAnnotation.annotation_data
-      } catch (e) {
-        console.error('[MEASUREMENT] Failed to parse annotation_data:', e)
-        setError('Failed to parse annotation data. Please re-upload the annotation.')
-        return
-      }
-
-      console.log('[MEASUREMENT] Parsed annotation_data:', annotationData)
-      console.log('[MEASUREMENT] Keypoints type:', typeof annotationData.keypoints)
-      console.log('[MEASUREMENT] Keypoints sample:', JSON.stringify(annotationData.keypoints?.slice?.(0, 2)))
-      console.log('[MEASUREMENT] Placement box:', annotationData.placement_box)
-
-      // Parse keypoints - handle multiple formats
-      let keypointsPixels: number[][] = []
-
-      if (annotationData.keypoints) {
-        if (typeof annotationData.keypoints === 'string') {
-          // Format: "x1 y1 x2 y2 ..." or "[[x1,y1],[x2,y2],...]" 
-          const kpStr = annotationData.keypoints.trim()
-          if (kpStr.startsWith('[')) {
-            // JSON string
-            const parsed = JSON.parse(kpStr)
-            keypointsPixels = parsed.map((kp: any) =>
-              Array.isArray(kp) ? [Number(kp[0]), Number(kp[1])] : [Number(kp.x), Number(kp.y)]
-            )
-          } else {
-            // Space-separated: "x1 y1 x2 y2 ..."
-            const nums = kpStr.split(/\s+/).map(Number)
-            for (let i = 0; i < nums.length - 1; i += 2) {
-              keypointsPixels.push([nums[i], nums[i + 1]])
-            }
-          }
-        } else if (Array.isArray(annotationData.keypoints)) {
-          // Array format - could be [{x,y}] or [[x,y]]
-          keypointsPixels = annotationData.keypoints.map((kp: any) => {
-            if (Array.isArray(kp)) {
-              return [Number(kp[0]), Number(kp[1])]
-            } else if (typeof kp === 'object' && kp !== null) {
-              return [Number(kp.x), Number(kp.y)]
-            }
-            return [0, 0]
-          })
-        }
-      }
-
-      console.log('[MEASUREMENT] Converted keypoints:', keypointsPixels.length, 'points')
-      console.log('[MEASUREMENT] First 3 keypoints:', keypointsPixels.slice(0, 3))
-
-      // Validate keypoints
-      if (keypointsPixels.length < 2) {
-        setError(`Insufficient keypoints (${keypointsPixels.length}). Need at least 2 points for measurement.`)
-        return
-      }
-
-      // Parse placement_box - handle multiple formats
-      let placementBox: number[] | null = null
-      if (annotationData.placement_box) {
-        const pb = annotationData.placement_box
-        if (typeof pb === 'string') {
-          // Format: "x1 y1 x2 y2" or "x y width height"
-          const nums = pb.trim().split(/\s+/).map(Number)
-          if (nums.length >= 4) {
-            placementBox = nums.slice(0, 4)
-          }
-          console.log('[MEASUREMENT] Parsed placement_box from string:', placementBox)
-        } else if (typeof pb === 'object' && pb !== null) {
-          if ('width' in pb && 'height' in pb) {
-            // Format: {x, y, width, height}
-            placementBox = [pb.x, pb.y, pb.x + pb.width, pb.y + pb.height]
-          } else if (Array.isArray(pb)) {
-            // Format: [x1, y1, x2, y2]
-            placementBox = pb.map(Number)
-          }
-          console.log('[MEASUREMENT] Parsed placement_box from object:', placementBox)
-        }
-      }
-
-      // ============== Fetch target_distances from measurements table ==============
-      let targetDistances: Record<string, number> = {}
-
-      // Get measurements from database (same logic as before)
-      const articleResult = await window.database.query<{ id: number }>(
-        `SELECT id FROM articles WHERE article_style = ? LIMIT 1`,
-        [articleStyle]
-      )
-
-      if (articleResult.success && articleResult.data && articleResult.data.length > 0) {
-        const articleId = articleResult.data[0].id
-
-        const measurementsResult = await window.database.query<{
-          measurement_id: number,
-          measurement_name: string,
-          target_value: number
+        const annotationResult = await window.database.query<{
+          id: number
+          article_style: string
+          size: string
+          annotation_data: string
+          image_width: number
+          image_height: number
+          reference_image_data: string
+          reference_image_mime_type: string
         }>(
-          `SELECT m.id as measurement_id, m.measurement as measurement_name, ms.value as target_value
-           FROM measurements m 
-           JOIN measurement_sizes ms ON m.id = ms.measurement_id 
-           WHERE m.article_id = ? AND ms.size = ?
-           ORDER BY m.id`,
-          [articleId, selectedSize]
+          `SELECT id, article_style, size, annotation_data, image_width, image_height, reference_image_data, reference_image_mime_type
+           FROM uploaded_annotations 
+           WHERE article_style = ? AND size = ? AND side = ?`,
+          [articleStyle, selectedSize, side]
         )
 
-        if (measurementsResult.success && measurementsResult.data && measurementsResult.data.length > 0) {
-          measurementsResult.data.forEach((m, index) => {
-            targetDistances[String(index + 1)] = Number(m.target_value)
-          })
-          console.log('[MEASUREMENT] Got target_distances from measurements table:', targetDistances)
-        } else {
-          // Fallback to annotation_data.target_distances if available
+        if (annotationResult.success && annotationResult.data && annotationResult.data.length > 0) {
+          const dbAnnotation = annotationResult.data[0]
+          console.log('[MEASUREMENT] Found annotation in database, ID:', dbAnnotation.id)
+
+          // Parse annotation_data
+          const annotationData = typeof dbAnnotation.annotation_data === 'string'
+            ? JSON.parse(dbAnnotation.annotation_data)
+            : dbAnnotation.annotation_data
+
+          // Parse keypoints
+          if (annotationData.keypoints) {
+            if (typeof annotationData.keypoints === 'string') {
+              const kpStr = annotationData.keypoints.trim()
+              if (kpStr.startsWith('[')) {
+                const parsed = JSON.parse(kpStr)
+                keypointsPixels = parsed.map((kp: any) =>
+                  Array.isArray(kp) ? [Number(kp[0]), Number(kp[1])] : [Number(kp.x), Number(kp.y)]
+                )
+              } else {
+                const nums = kpStr.split(/\s+/).map(Number)
+                for (let i = 0; i < nums.length - 1; i += 2) {
+                  keypointsPixels.push([nums[i], nums[i + 1]])
+                }
+              }
+            } else if (Array.isArray(annotationData.keypoints)) {
+              keypointsPixels = annotationData.keypoints.map((kp: any) => {
+                if (Array.isArray(kp)) return [Number(kp[0]), Number(kp[1])]
+                if (typeof kp === 'object' && kp !== null) return [Number(kp.x), Number(kp.y)]
+                return [0, 0]
+              })
+            }
+          }
+
+          // Parse target_distances
           const td = annotationData.target_distances
           if (typeof td === 'string') {
             try { targetDistances = JSON.parse(td) } catch { targetDistances = {} }
-          } else {
-            targetDistances = td || {}
+          } else if (td && typeof td === 'object') {
+            targetDistances = td
           }
-          console.log('[MEASUREMENT] Using annotation target_distances:', targetDistances)
-        }
-      } else {
-        const td = annotationData.target_distances
-        if (typeof td === 'string') {
-          try { targetDistances = JSON.parse(td) } catch { targetDistances = {} }
+
+          // Parse placement_box
+          if (annotationData.placement_box) {
+            const pb = annotationData.placement_box
+            if (typeof pb === 'string') {
+              const nums = pb.trim().split(/\s+/).map(Number)
+              if (nums.length >= 4) placementBox = nums.slice(0, 4)
+            } else if (Array.isArray(pb)) {
+              placementBox = pb.map(Number)
+            } else if (typeof pb === 'object' && 'width' in pb) {
+              placementBox = [pb.x, pb.y, pb.x + pb.width, pb.y + pb.height]
+            }
+          }
+
+          // Get image
+          if (dbAnnotation.reference_image_data) {
+            imageData = dbAnnotation.reference_image_data
+            imageMimeType = dbAnnotation.reference_image_mime_type || 'image/jpeg'
+            if (!imageData.startsWith('data:image/')) {
+              imageData = `data:${imageMimeType};base64,${imageData}`
+            }
+          }
+
+          imageWidth = dbAnnotation.image_width || 5472
+          imageHeight = dbAnnotation.image_height || 2752
+
+          console.log('[MEASUREMENT] Parsed from DB:', keypointsPixels.length, 'keypoints,', Object.keys(targetDistances).length, 'targets')
         } else {
-          targetDistances = td || {}
-        }
-        console.log('[MEASUREMENT] Article not found, using annotation target_distances:', targetDistances)
-      }
-
-      // ============== Fetch reference image from Laravel API via IPC (bypasses CORS) ==============
-      console.log('[MEASUREMENT] Fetching reference image via IPC:', articleStyle, selectedSize)
-
-      let imageData: string | null = null
-      let imageMimeType = 'image/jpeg'
-
-      try {
-        const imageResult = await window.measurement.fetchLaravelImage(articleStyle, selectedSize)
-
-        if (imageResult.status === 'success' && imageResult.data) {
-          imageData = imageResult.data // Already includes data:image/...;base64, prefix
-          imageMimeType = imageResult.mime_type || 'image/jpeg'
-          console.log('[MEASUREMENT] Fetched reference image from Laravel API via IPC')
-          console.log('[MEASUREMENT] Image dimensions from API:', imageResult.width, 'x', imageResult.height)
-        } else {
-          throw new Error(imageResult.message || 'Invalid image response from API')
+          console.log('[MEASUREMENT] No annotation in database, will use local files')
+          useLocalFiles = true
         }
       } catch (err) {
-        console.error('[MEASUREMENT] Failed to fetch reference image:', err)
-        setError(`Failed to fetch reference image from server: ${err instanceof Error ? err.message : String(err)}`)
-        return
+        console.warn('[MEASUREMENT] Database query error:', err)
+        useLocalFiles = true
       }
 
-      // ============== Save files to temp_measure folder ==============
-      console.log('[MEASUREMENT] Saving files to temp_measure folder...')
-
-      try {
-        const saveResult = await window.measurement.saveTempFiles({
-          keypoints: keypointsPixels,
-          target_distances: targetDistances,
-          placement_box: placementBox,
-          image_width: dbAnnotation.image_width,
-          image_height: dbAnnotation.image_height,
-          image_base64: imageData!
-        })
-
-        if (saveResult.status === 'success') {
-          console.log('[MEASUREMENT] Files saved to temp_measure:')
-          console.log('  - JSON:', saveResult.jsonPath)
-          console.log('  - Image:', saveResult.imagePath)
-        } else {
-          console.error('[MEASUREMENT] Failed to save temp files:', saveResult.message)
-        }
-      } catch (err) {
-        console.error('[MEASUREMENT] Error saving temp files:', err)
-        // Continue with measurement even if file saving fails
-      }
-
-      // ============== Start measurement with fetched data ==============
-      console.log('[MEASUREMENT] Starting measurement with:')
+      // ============== Start measurement ==============
+      console.log('[MEASUREMENT] Starting camera with:')
       console.log('  - Keypoints:', keypointsPixels.length)
       console.log('  - Target distances:', Object.keys(targetDistances).length)
-      console.log('  - Image dimensions:', dbAnnotation.image_width, 'x', dbAnnotation.image_height)
+      console.log('  - Use local files:', useLocalFiles)
 
       const result = await window.measurement.start({
         annotation_name: selectedSize,
         article_style: articleStyle,
-        side: 'front',
-        keypoints_pixels: JSON.stringify(keypointsPixels),
-        target_distances: JSON.stringify(targetDistances),
+        side: side,
+        keypoints_pixels: keypointsPixels.length > 0 ? JSON.stringify(keypointsPixels) : undefined,
+        target_distances: Object.keys(targetDistances).length > 0 ? JSON.stringify(targetDistances) : undefined,
         placement_box: placementBox ? JSON.stringify(placementBox) : undefined,
-        image_width: dbAnnotation.image_width,
-        image_height: dbAnnotation.image_height,
-        annotation_data: undefined,
-        image_data: imageData!,
+        image_width: imageWidth,
+        image_height: imageHeight,
+        image_data: imageData || undefined,
         image_mime_type: imageMimeType
       })
 
@@ -1055,13 +969,14 @@ export function ArticlesList() {
         setIsMeasurementEnabled(true)
         setIsPollingActive(true) // Start live polling
         setError(null)
-        console.log('[MEASUREMENT] Measurement started successfully!')
+        console.log('[MEASUREMENT] Camera started successfully! Fullscreen window should open.')
       } else {
-        setError(result.message || 'Failed to start camera system')
+        console.error('[MEASUREMENT] Failed to start:', result.message)
+        setError(result.message || 'Failed to start camera. Check if annotation exists for this article/size.')
       }
     } catch (err) {
-      console.error('Start measurement error:', err)
-      setError('Measurement service not responding')
+      console.error('[MEASUREMENT] Start measurement error:', err)
+      setError('Measurement service not responding. Is Python API running?')
     }
   }
 
@@ -1071,9 +986,9 @@ export function ArticlesList() {
       console.log('[TEST] Starting measurement with TEST ANNOTATION from testjson folder...')
 
       // Keypoints and target distances from testjson/annotation_test.json
-      // These are for the 5488x3672 reference image (matches camera native resolution)
-      const TEST_WIDTH = 5488
-      const TEST_HEIGHT = 3672
+      // These are for the 5472x2752 reference image (matches camera native resolution)
+      const TEST_WIDTH = 5472
+      const TEST_HEIGHT = 2752
 
       // Keypoints and target distances from testjson/annotation_data.json (SYNCED!)
       const testKeypoints = [
@@ -1139,7 +1054,7 @@ export function ArticlesList() {
       }
 
       // Start measurement with test annotation and test image
-      // Since test image is 5488x3672 (same as camera), live frame will resize to match
+      // Since test image is 5472x2752 (same as camera), live frame will resize to match
       const result = await window.measurement.start({
         annotation_name: 'TEST',
         article_style: 'TEST-ANNOTATION',
@@ -1183,14 +1098,18 @@ export function ArticlesList() {
         }>
 
         // Update measured values with final readings
+        // liveMeasurement.id is 1-based index (1,2,3...), map to measurementSpecs array
         setMeasuredValues(prev => {
           const newValues = { ...prev }
           liveData.forEach((liveMeasurement) => {
+            // Live measurement ID is 1-based, so index = id - 1
             const specIndex = liveMeasurement.id - 1
-            const spec = measurementSpecs[specIndex]
-            if (spec) {
+            if (specIndex >= 0 && specIndex < measurementSpecs.length) {
+              const spec = measurementSpecs[specIndex]
               newValues[spec.id] = liveMeasurement.actual_cm.toFixed(2)
-              console.log(`[COMPLETE] Final value for ${spec.code}: ${liveMeasurement.actual_cm.toFixed(2)} cm`)
+              console.log(`[COMPLETE] Spec[${specIndex}] "${spec.code}" (DB id=${spec.id}): ${liveMeasurement.actual_cm.toFixed(2)} cm`)
+            } else {
+              console.warn(`[COMPLETE] No spec at index ${specIndex} for live measurement id ${liveMeasurement.id}`)
             }
           })
           return newValues
@@ -1208,11 +1127,357 @@ export function ArticlesList() {
       // Final save with all current values
       await saveMeasurements()
 
+      // Calculate QC result after a brief delay to ensure state is updated
+      setTimeout(() => {
+        const failed: { code: string, measurement: string, expected: number, actual: number }[] = []
+
+        measurementSpecs.forEach(spec => {
+          const valueStr = measuredValues[spec.id]
+          if (!valueStr) return
+
+          const value = parseFloat(valueStr)
+          const expected = parseFloat(String(spec.expected_value)) || 0
+          const tolPlus = parseFloat(String(spec.tol_plus)) || 0
+          const tolMinus = parseFloat(String(spec.tol_minus)) || 0
+
+          const minValid = expected - tolMinus
+          const maxValid = expected + tolPlus
+
+          if (value < minValid || value > maxValid) {
+            failed.push({
+              code: spec.code,
+              measurement: spec.measurement,
+              expected: expected,
+              actual: value
+            })
+          }
+        })
+
+        setFailedMeasurements(failed)
+        setQcPassed(failed.length === 0)
+        setShowQCResult(true)
+      }, 100)
+
       console.log('[COMPLETE] Measurement completed and saved')
       setError(null)
     } catch (err) {
       console.error('Complete measurement error:', err)
       setError('Failed to complete measurement')
+    }
+  }
+
+  // Front Side Measurement - starts measurement with front annotation
+  const handleFrontSideMeasurement = () => {
+    handleStartMeasurement('front')
+  }
+
+  // Back Side Measurement - starts measurement with back annotation
+  const handleBackSideMeasurement = () => {
+    handleStartMeasurement('back')
+  }
+
+  // Stop measurement - stops camera, calculates QC, and shows result
+  const handleStopMeasurement = async () => {
+    try {
+      console.log(`[STOP] Stopping ${currentMeasurementSide} side measurement...`)
+
+      // Fetch final live measurements before stopping
+      const finalResult = await window.measurement.getLiveResults()
+      let finalMeasuredValues = { ...measuredValues }
+      
+      if (finalResult.status === 'success' && finalResult.data && finalResult.data.measurements) {
+        const liveData = finalResult.data.measurements as Array<{
+          id: number
+          actual_cm: number
+        }>
+
+        // Update measured values with final readings
+        liveData.forEach((liveMeasurement) => {
+          const specIndex = liveMeasurement.id - 1
+          if (specIndex >= 0 && specIndex < measurementSpecs.length) {
+            const spec = measurementSpecs[specIndex]
+            finalMeasuredValues[spec.id] = liveMeasurement.actual_cm.toFixed(2)
+            console.log(`[STOP] Spec[${specIndex}] "${spec.code}": ${liveMeasurement.actual_cm.toFixed(2)} cm`)
+          }
+        })
+        
+        setMeasuredValues(finalMeasuredValues)
+      }
+
+      // Stop the camera system completely
+      await window.measurement.stop()
+      setIsPollingActive(false)
+      setIsMeasurementEnabled(false)
+
+      // Track which side was completed and store measurements separately
+      const completedSide = currentMeasurementSide
+      setCurrentMeasurementSide(null)
+
+      if (completedSide === 'front') {
+        console.log('[STOP] Front side measurement complete')
+        setFrontMeasuredValues({ ...finalMeasuredValues })
+        setFrontSideComplete(true)
+      } else if (completedSide === 'back') {
+        console.log('[STOP] Back side measurement complete')
+        setBackMeasuredValues({ ...finalMeasuredValues })
+        setBackSideComplete(true)
+      }
+
+      // Save measurements to database with side information
+      await saveMeasurementsWithSide(completedSide || 'front', finalMeasuredValues)
+
+      // Calculate QC result immediately and show popup
+      const failed: { code: string, measurement: string, expected: number, actual: number }[] = []
+
+      measurementSpecs.forEach(spec => {
+        const valueStr = finalMeasuredValues[spec.id]
+        if (!valueStr) return
+
+        const value = parseFloat(valueStr)
+        const expected = parseFloat(String(spec.expected_value)) || 0
+        const tolPlus = parseFloat(String(spec.tol_plus)) || 0
+        const tolMinus = parseFloat(String(spec.tol_minus)) || 0
+
+        const minValid = expected - tolMinus
+        const maxValid = expected + tolPlus
+
+        console.log(`[QC] ${spec.code}: actual=${value}, expected=${expected}, range=[${minValid}, ${maxValid}]`)
+
+        if (value < minValid || value > maxValid) {
+          failed.push({
+            code: spec.code,
+            measurement: spec.measurement,
+            expected: expected,
+            actual: value
+          })
+        }
+      })
+
+      setFailedMeasurements(failed)
+      setQcPassed(failed.length === 0)
+      setLastQCSide(completedSide)
+      setShowQCResult(true)
+      setMeasurementComplete(true)
+      
+      // Track QC check for each side
+      if (completedSide === 'front') {
+        setFrontQCChecked(true)
+      } else if (completedSide === 'back') {
+        setBackQCChecked(true)
+      }
+      
+      console.log(`[STOP] QC Result for ${completedSide} side: ${failed.length === 0 ? 'PASSED ✓' : 'FAILED ✗'}`)
+      if (failed.length > 0) {
+        console.log('[STOP] Failed measurements:', failed.map(f => f.code).join(', '))
+      }
+
+      setError(null)
+    } catch (err) {
+      console.error('[STOP] Error stopping measurement:', err)
+      setError('Failed to stop measurement')
+    }
+  }
+
+  // Handle QC popup close - just close popup, allow user to continue with other side
+  const handleQCClose = () => {
+    console.log('[QC] Closing QC popup - user can continue measuring other side')
+    setShowQCResult(false)
+    setMeasurementComplete(false) // Allow further measurements
+  }
+
+  // Handle Next Article - save all measurements and reset panel for next article
+  const handleNextArticle = async () => {
+    console.log('[NEXT] Moving to next article - saving measurements...')
+    
+    try {
+      // Final save of all measurements to database
+      const articleStyle = jobCardSummary?.article_style ||
+        articles.find(a => a.id === selectedArticleId)?.article_style
+      
+      // Save a measurement session record for analytics
+      if (selectedPOArticleId && selectedSize && operator?.id) {
+        const frontQCPassed = frontSideComplete && frontQCChecked ? (qcPassed ? 'PASS' : 'FAIL') : null
+        const backQCPassed = backSideComplete && backQCChecked ? (qcPassed ? 'PASS' : 'FAIL') : null
+        
+        await window.database.execute(`
+          INSERT INTO measurement_sessions 
+            (purchase_order_article_id, size, article_style, operator_id, 
+             front_side_complete, back_side_complete, 
+             front_qc_result, back_qc_result,
+             completed_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+          ON DUPLICATE KEY UPDATE
+            front_side_complete = VALUES(front_side_complete),
+            back_side_complete = VALUES(back_side_complete),
+            front_qc_result = VALUES(front_qc_result),
+            back_qc_result = VALUES(back_qc_result),
+            completed_at = NOW()
+        `, [
+          selectedPOArticleId,
+          selectedSize,
+          articleStyle,
+          operator.id,
+          frontSideComplete ? 1 : 0,
+          backSideComplete ? 1 : 0,
+          frontQCPassed,
+          backQCPassed
+        ])
+        console.log('[NEXT] Saved measurement session for analytics')
+      }
+
+      console.log('[NEXT] Resetting panel for next article...')
+      
+      // Close QC popup if open
+      setShowQCResult(false)
+
+      // Reset all selections
+      setSelectedBrandId(null)
+      setSelectedArticleTypeId(null)
+      setSelectedArticleId(null)
+      setSelectedPOId(null)
+      setSelectedPOArticleId(null)
+      setSelectedSize(null)
+
+      // Reset measurement states
+      setMeasurementSpecs([])
+      setMeasuredValues({})
+      setFrontMeasuredValues({})
+      setBackMeasuredValues({})
+      setFrontSideComplete(false)
+      setBackSideComplete(false)
+      setFrontQCChecked(false)
+      setBackQCChecked(false)
+      setLastQCSide(null)
+      setCurrentMeasurementSide(null)
+      setMeasurementComplete(false)
+      setIsMeasurementEnabled(false)
+      setIsPollingActive(false)
+
+      // Reset related lists
+      setArticleTypes([])
+      setArticles([])
+      setPurchaseOrders([])
+      setPOArticles([])
+      setAvailableSizes([])
+      setJobCardSummary(null)
+      
+      // Reset QC popup states
+      setQcPassed(true)
+      setFailedMeasurements([])
+
+      setError(null)
+      console.log('[NEXT] Panel reset complete - ready for next article')
+    } catch (err) {
+      console.error('[NEXT] Error during next article transition:', err)
+      setError('Failed to save measurements. Please try again.')
+    }
+  }
+
+  // Check QC for specific side measurements
+  const handleCheckQC = async (side?: 'front' | 'back') => {
+    // Determine which measurements to check
+    const targetSide = side || lastQCSide || (frontSideComplete ? 'front' : backSideComplete ? 'back' : null)
+    
+    if (!targetSide) {
+      setError('Please complete at least one side measurement before checking QC')
+      return
+    }
+    
+    const valuesToCheck = targetSide === 'front' ? frontMeasuredValues : backMeasuredValues
+    
+    console.log(`[QC] Checking QC for ${targetSide} side with ${Object.keys(valuesToCheck).length} measurements`)
+    
+    // Calculate QC result
+    const failed: { code: string, measurement: string, expected: number, actual: number }[] = []
+
+    measurementSpecs.forEach(spec => {
+      const valueStr = valuesToCheck[spec.id]
+      if (!valueStr) return
+
+      const value = parseFloat(valueStr)
+      const expected = parseFloat(String(spec.expected_value)) || 0
+      const tolPlus = parseFloat(String(spec.tol_plus)) || 0
+      const tolMinus = parseFloat(String(spec.tol_minus)) || 0
+
+      const minValid = expected - tolMinus
+      const maxValid = expected + tolPlus
+
+      if (value < minValid || value > maxValid) {
+        failed.push({
+          code: spec.code,
+          measurement: spec.measurement,
+          expected: expected,
+          actual: value
+        })
+      }
+    })
+
+    setFailedMeasurements(failed)
+    setQcPassed(failed.length === 0)
+    setLastQCSide(targetSide)
+    setShowQCResult(true)
+    
+    if (targetSide === 'front') {
+      setFrontQCChecked(true)
+    } else {
+      setBackQCChecked(true)
+    }
+    
+    console.log(`[QC] ${targetSide} side QC Result: ${failed.length === 0 ? 'PASSED ✓' : 'FAILED ✗'}`)
+  }
+
+  // Final Complete - calculate QC and show result (3rd button)
+  const handleFinalComplete = async () => {
+    try {
+      console.log('[FINAL] Completing measurement and calculating QC...')
+
+      // Verify both sides are complete
+      if (!frontSideComplete || !backSideComplete) {
+        setError('Both front and back sides must be measured before final completion')
+        return
+      }
+
+      setMeasurementComplete(true)
+
+      // Save measurements to database
+      await saveMeasurements()
+
+      // Calculate QC result
+      setTimeout(() => {
+        const failed: { code: string, measurement: string, expected: number, actual: number }[] = []
+
+        measurementSpecs.forEach(spec => {
+          const valueStr = measuredValues[spec.id]
+          if (!valueStr) return
+
+          const value = parseFloat(valueStr)
+          const expected = parseFloat(String(spec.expected_value)) || 0
+          const tolPlus = parseFloat(String(spec.tol_plus)) || 0
+          const tolMinus = parseFloat(String(spec.tol_minus)) || 0
+
+          const minValid = expected - tolMinus
+          const maxValid = expected + tolPlus
+
+          if (value < minValid || value > maxValid) {
+            failed.push({
+              code: spec.code,
+              measurement: spec.measurement,
+              expected: expected,
+              actual: value
+            })
+          }
+        })
+
+        setFailedMeasurements(failed)
+        setQcPassed(failed.length === 0)
+        setShowQCResult(true)
+        console.log(`[FINAL] QC Result: ${failed.length === 0 ? 'PASSED' : 'FAILED'}`)
+      }, 100)
+
+      setError(null)
+    } catch (err) {
+      console.error('[FINAL] Error completing measurement:', err)
+      setError('Failed to complete final measurement')
     }
   }
 
@@ -1265,7 +1530,112 @@ export function ArticlesList() {
     }
   }
 
-  const handleNextArticle = async () => {
+  // Save measurements with side information for analytics
+  const saveMeasurementsWithSide = async (side: 'front' | 'back', measurements: Record<number, string>): Promise<boolean> => {
+    if (!selectedPOArticleId || !selectedSize) {
+      console.log('[SAVE] Missing PO article ID or size')
+      return false
+    }
+
+    const articleStyle = jobCardSummary?.article_style ||
+      articles.find(a => a.id === selectedArticleId)?.article_style
+
+    setIsSaving(true)
+    console.log(`[SAVE] Saving ${side} side measurements for PO Article:`, selectedPOArticleId, 'Size:', selectedSize)
+
+    try {
+      // Delete previous measurements for this article/size/side (remeasure logic)
+      await window.database.execute(`
+        DELETE FROM measurement_results_detailed 
+        WHERE purchase_order_article_id = ? AND size = ? AND side = ?
+      `, [selectedPOArticleId, selectedSize, side])
+      console.log(`[SAVE] Cleared old ${side} side measurements`)
+
+      let savedCount = 0
+      for (const spec of measurementSpecs) {
+        const valueStr = measurements[spec.id]
+        const value = valueStr ? parseFloat(valueStr) : null
+        
+        if (value === null) continue // Skip empty values
+        
+        // Calculate status
+        const expected = parseFloat(String(spec.expected_value)) || 0
+        const tolPlus = parseFloat(String(spec.tol_plus)) || 0
+        const tolMinus = parseFloat(String(spec.tol_minus)) || 0
+        const minValid = expected - tolMinus
+        const maxValid = expected + tolPlus
+        const status = (value >= minValid && value <= maxValid) ? 'PASS' : 'FAIL'
+
+        // Save to detailed results table with side info
+        const sql = `
+          INSERT INTO measurement_results_detailed 
+            (purchase_order_article_id, measurement_id, size, side, article_style,
+             measured_value, expected_value, tol_plus, tol_minus, status, operator_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `
+        await window.database.execute(sql, [
+          selectedPOArticleId,
+          spec.id,
+          selectedSize,
+          side,
+          articleStyle,
+          value,
+          expected,
+          tolPlus,
+          tolMinus,
+          status,
+          operator?.id || null
+        ])
+        savedCount++
+        console.log(`[SAVE] Saved ${side} ${spec.code}: value=${value}, status=${status}`)
+      }
+
+      // Also update the simple measurement_results table for backward compatibility
+      for (const spec of measurementSpecs) {
+        const valueStr = measurements[spec.id]
+        const value = valueStr ? parseFloat(valueStr) : null
+        
+        if (value === null) continue
+        
+        const expected = parseFloat(String(spec.expected_value)) || 0
+        const tolPlus = parseFloat(String(spec.tol_plus)) || 0
+        const tolMinus = parseFloat(String(spec.tol_minus)) || 0
+        const minValid = expected - tolMinus
+        const maxValid = expected + tolPlus
+        const status = (value >= minValid && value <= maxValid) ? 'PASS' : 'FAIL'
+
+        await window.database.execute(`
+          INSERT INTO measurement_results 
+            (purchase_order_article_id, measurement_id, size, measured_value, status, operator_id)
+          VALUES (?, ?, ?, ?, ?, ?)
+          ON DUPLICATE KEY UPDATE
+            measured_value = VALUES(measured_value),
+            status = VALUES(status),
+            operator_id = VALUES(operator_id),
+            updated_at = CURRENT_TIMESTAMP
+        `, [
+          selectedPOArticleId,
+          spec.id,
+          selectedSize,
+          value,
+          status,
+          operator?.id || null
+        ])
+      }
+
+      console.log(`[SAVE] Successfully saved ${savedCount} ${side} side measurements`)
+      return true
+    } catch (err) {
+      console.error(`[SAVE] Failed to save ${side} side measurements:`, err)
+      // If the detailed table doesn't exist, that's okay - the basic save will work
+      return true
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  // This function is now replaced by the one defined earlier with analytics saving
+  const handleNextArticleOld = async () => {
     const allComplete = measurementSpecs.every(spec => {
       const valueStr = measuredValues[spec.id]
       return valueStr && valueStr !== ''
@@ -1725,6 +2095,19 @@ export function ArticlesList() {
                   'under armour': '/company logo/Under_Armour-Logo.wine.png',
                   'champion': '/company logo/champian.jpg',
                   'fila': '/company logo/fila-logo-design-history-and-evolution-kreafolk_94ed6bf4-6bfd-44f9-a60c-fd3f570e120e.webp',
+                  'lckr': '/company logo/Lckr-logo.jpg',
+                  'bass pro': '/company logo/basspro.jpg',
+                  'bass pro shops': '/company logo/basspro.jpg',
+                  'basspro': '/company logo/basspro.jpg',
+                  'basspro shops': '/company logo/basspro.jpg',
+                  'bass': '/company logo/basspro.jpg',
+                  'kiabi': '/company logo/kiabi-logo.png',
+                  'pull & bear': '/company logo/pullandbear.png',
+                  'pull and bear': '/company logo/pullandbear.png',
+                  'us polo': '/company logo/us-polo.jpg',
+                  'u.s. polo': '/company logo/us-polo.jpg',
+                  'us polo assn': '/company logo/us-polo.jpg',
+                  'zara': '/company logo/zara.png',
                 }
                 const logoPath = logoMap[brand.name.toLowerCase()] || null
 
@@ -1733,7 +2116,7 @@ export function ArticlesList() {
                     key={brand.id}
                     onClick={() => handleBrandChange(brand.id)}
                     className={`flex-shrink-0 h-28 w-36 p-3 rounded-xl border-3 transition-all duration-200 flex items-center justify-center bg-white brand-logo-bg ${selectedBrandId === brand.id
-                      ? 'border-primary shadow-xl shadow-primary/30 scale-105 ring-2 ring-primary/20'
+                      ? 'border-secondary shadow-xl shadow-secondary/40 scale-105 ring-4 ring-secondary/30'
                       : 'border-slate-200 hover:border-secondary hover:shadow-lg hover:scale-102'
                       }`}
                     title={brand.name}
@@ -1804,8 +2187,8 @@ export function ArticlesList() {
                     key={article.id}
                     onClick={() => handleArticleChange(article.id)}
                     className={`flex-shrink-0 px-6 py-4 rounded-xl text-touch-lg font-bold transition-all duration-200 border-2 ${selectedArticleId === article.id
-                      ? 'bg-primary text-white border-primary shadow-lg shadow-primary/30'
-                      : 'bg-white text-primary border-slate-200 hover:border-primary hover:bg-surface-teal'
+                      ? 'bg-secondary text-white border-secondary shadow-lg shadow-secondary/30'
+                      : 'bg-white text-primary border-slate-200 hover:border-secondary hover:bg-surface-teal'
                       }`}
                   >
                     {article.article_style}
@@ -1828,7 +2211,7 @@ export function ArticlesList() {
                 Select an article to load sizes
               </div>
             ) : (
-              <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-1">
+              <div className="flex gap-4 overflow-x-auto scrollbar-hide py-2 px-2 -mx-2">
                 {availableSizes.map((size) => (
                   <button
                     key={size}
@@ -1990,57 +2373,241 @@ export function ArticlesList() {
             </table>
           </div>
 
-          {/* Measurement Action Button - Fixed at bottom */}
-          <div className="px-4 py-4 border-t border-slate-200 bg-white shrink-0">
-            {!isMeasurementEnabled ? (
-              <div className="flex gap-3">
-                <button
-                  onClick={handleStartMeasurement}
-                  disabled={!selectedSize}
-                  className={`flex-1 py-4 rounded-xl text-touch-lg font-bold transition-all flex items-center justify-center gap-3 ${selectedSize
-                    ? 'bg-primary text-white hover:bg-primary-dark shadow-lg shadow-primary/30'
-                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                    }`}
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          {/* Measurement Action Buttons - All 4 Visible */}
+          <div className="px-4 py-3 border-t border-slate-200 bg-white shrink-0">
+            {/* Row 1: Front Side | Back Side | Stop */}
+            <div className="grid grid-cols-3 gap-2 mb-2">
+              {/* Front Side Button - shows check when complete, allows remeasure */}
+              <button
+                onClick={() => {
+                  if (frontSideComplete) {
+                    // Remeasure - reset front side
+                    setFrontSideComplete(false)
+                    setFrontQCChecked(false)
+                    setFrontMeasuredValues({})
+                    setMeasuredValues({})
+                  }
+                  handleFrontSideMeasurement()
+                }}
+                disabled={!selectedSize || isPollingActive}
+                className={`py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1 ${!selectedSize || isPollingActive
+                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  : frontSideComplete 
+                    ? 'bg-success/20 text-success border-2 border-success hover:bg-success hover:text-white shadow-md'
+                    : 'bg-primary text-white hover:bg-primary-dark shadow-md'
+                  }`}
+              >
+                {frontSideComplete ? (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
-                  Start Measurement
-                </button>
-                <button
-                  onClick={handleTestAnnotationMeasurement}
-                  disabled={!selectedSize}
-                  className={`px-6 py-4 rounded-xl text-touch-lg font-bold transition-all flex items-center justify-center gap-2 ${selectedSize
-                    ? 'bg-secondary text-white hover:bg-secondary-dark shadow-lg shadow-secondary/30'
-                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                    }`}
-                  title="Test with sample data"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                  Test
-                </button>
-              </div>
-            ) : isPollingActive ? (
-              <button
-                onClick={handleCompleteMeasurement}
-                className="w-full py-4 rounded-xl text-touch-lg font-bold bg-success text-white hover:bg-success/90 transition-all flex items-center justify-center gap-3 shadow-lg shadow-success/30"
-              >
-                <span className="w-3 h-3 rounded-full bg-white animate-pulse"></span>
-                Complete Measurement
+                )}
+                Front Side
               </button>
-            ) : (
-              <div className="w-full py-4 rounded-xl text-touch-lg font-bold bg-success-light text-success border-2 border-success/30 flex items-center justify-center gap-3">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+
+              {/* Back Side Button - shows check when complete, allows remeasure */}
+              <button
+                onClick={() => {
+                  if (backSideComplete) {
+                    // Remeasure - reset back side
+                    setBackSideComplete(false)
+                    setBackQCChecked(false)
+                    setBackMeasuredValues({})
+                    setMeasuredValues({})
+                  }
+                  handleBackSideMeasurement()
+                }}
+                disabled={!selectedSize || isPollingActive}
+                className={`py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1 ${!selectedSize || isPollingActive
+                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  : backSideComplete 
+                    ? 'bg-success/20 text-success border-2 border-success hover:bg-success hover:text-white shadow-md'
+                    : 'bg-success text-white hover:bg-success/90 shadow-md'
+                  }`}
+              >
+                {backSideComplete ? (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                )}
+                Back Side
+              </button>
+
+              {/* Stop Button */}
+              <button
+                onClick={handleStopMeasurement}
+                disabled={!isPollingActive}
+                className={`py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1 ${!isPollingActive
+                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  : 'bg-error text-white hover:bg-error/90 shadow-md'
+                  }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
                 </svg>
-                Measurement Complete
-              </div>
-            )}
+                Stop
+              </button>
+            </div>
+
+            {/* Row 2: Check QC | Next Article */}
+            <div className="grid grid-cols-2 gap-2">
+              {/* Check QC - enabled when at least one side is complete */}
+              <button
+                onClick={() => handleCheckQC()}
+                disabled={!frontSideComplete && !backSideComplete}
+                className={`py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${!frontSideComplete && !backSideComplete
+                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  : 'bg-warning text-white hover:bg-warning/90 shadow-md'
+                  }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Check QC
+              </button>
+
+              {/* Next Article - save and reset */}
+              <button
+                onClick={handleNextArticle}
+                disabled={!frontSideComplete && !backSideComplete}
+                className={`py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${!frontSideComplete && !backSideComplete
+                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  : 'bg-primary text-white hover:bg-primary-dark shadow-md'
+                  }`}
+              >
+                Next Article
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* QC Result Popup Modal */}
+      {showQCResult && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-[500px] max-h-[80vh] overflow-y-auto">
+            {/* Header - Show which side was checked */}
+            <div className={`px-6 py-5 flex flex-col items-center justify-center gap-2 rounded-t-2xl ${qcPassed ? 'bg-success' : 'bg-error'}`}>
+              {lastQCSide && (
+                <span className="px-3 py-1 bg-white/20 rounded-full text-white text-xs font-semibold uppercase tracking-wide">
+                  {lastQCSide} Side
+                </span>
+              )}
+              {qcPassed ? (
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <h2 className="text-touch-2xl font-bold text-white">QC PASSED</h2>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </div>
+                  <h2 className="text-touch-2xl font-bold text-white">QC FAILED</h2>
+                </div>
+              )}
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              {qcPassed ? (
+                <div className="text-center py-4">
+                  <div className="w-20 h-20 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-10 h-10 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <p className="text-touch-lg text-slate-700 font-medium">
+                    All measurements are within tolerance.
+                  </p>
+                  <p className="text-touch-sm text-slate-500 mt-2">
+                    {lastQCSide === 'front' ? 'Front' : 'Back'} side has passed quality control inspection.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-touch-base text-slate-600 mb-4">
+                    The following measurements are out of tolerance:
+                  </p>
+                  <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                    {failedMeasurements.map((item, index) => (
+                      <div key={index} className="bg-error/5 border border-error/20 rounded-xl p-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-mono text-touch-sm font-bold text-error">{item.code}</span>
+                          <span className="text-touch-sm text-slate-600">-</span>
+                          <span className="text-touch-sm font-medium text-slate-700">{item.measurement}</span>
+                        </div>
+                        <div className="flex items-center gap-4 text-touch-xs">
+                          <span className="text-slate-500">
+                            Expected: <strong className="text-primary">{item.expected.toFixed(2)} cm</strong>
+                          </span>
+                          <span className="text-slate-500">
+                            Actual: <strong className="text-error">{item.actual.toFixed(2)} cm</strong>
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+{/* Footer - with Remeasure option for failed QC */}
+            <div className="px-6 pb-6 space-y-3">
+              {!qcPassed && (
+                <button
+                  onClick={() => {
+                    // Allow remeasure of the side that failed
+                    if (lastQCSide === 'front') {
+                      setFrontSideComplete(false)
+                      setFrontQCChecked(false)
+                      setFrontMeasuredValues({})
+                    } else if (lastQCSide === 'back') {
+                      setBackSideComplete(false)
+                      setBackQCChecked(false)
+                      setBackMeasuredValues({})
+                    }
+                    setMeasuredValues({})
+                    setShowQCResult(false)
+                    setMeasurementComplete(false)
+                  }}
+                  className="w-full py-4 font-bold text-touch-lg rounded-xl transition-colors bg-warning text-white hover:bg-warning/90"
+                >
+                  Remeasure {lastQCSide === 'front' ? 'Front' : 'Back'} Side
+                </button>
+              )}
+              <button
+                onClick={handleQCClose}
+                className={`w-full py-4 font-bold text-touch-lg rounded-xl transition-colors ${qcPassed
+                  ? 'bg-success text-white hover:bg-success/90'
+                  : 'bg-slate-300 text-slate-700 hover:bg-slate-400'
+                  }`}
+              >
+                {qcPassed ? 'Continue' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

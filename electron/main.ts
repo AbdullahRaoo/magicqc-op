@@ -452,10 +452,30 @@ function setupMeasurementHandlers() {
     }
   })
 
+  // Upload calibration JSON data
+  ipcMain.handle('measurement:uploadCalibration', async (_event, calibrationData: {
+    pixels_per_cm: number
+    reference_length_cm: number
+    is_calibrated: boolean
+  }) => {
+    try {
+      console.log('[MAIN] Uploading calibration:', calibrationData)
+      const response = await fetch(`${PYTHON_API_URL}/api/calibration/upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(calibrationData)
+      })
+      return await response.json()
+    } catch (error) {
+      console.error('[MAIN] Failed to upload calibration:', error)
+      return { status: 'error', message: 'Could not upload calibration. Please ensure Python server is running.' }
+    }
+  })
+
   // Fetch reference image from Laravel API (bypasses CORS in renderer)
   ipcMain.handle('measurement:fetchLaravelImage', async (_event, articleStyle: string, size: string) => {
     const LARAVEL_API_URL = 'http://127.0.0.1:8000'
-    const imageApiUrl = `${LARAVEL_API_URL}/api/uploaded-annotations/${encodeURIComponent(articleStyle)}/${encodeURIComponent(size)}/image-base64`
+    const imageApiUrl = `${LARAVEL_API_URL}/api/uploaded-annotations/fetch-image-base64?article_style=${encodeURIComponent(articleStyle)}&size=${encodeURIComponent(size)}`
 
     console.log('[MAIN] Fetching Laravel image:', imageApiUrl)
 

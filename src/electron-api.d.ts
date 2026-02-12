@@ -32,6 +32,11 @@ interface MeasurementAPI {
     startCalibration: () => Promise<{ status: string; message: string }>
     getCalibrationStatus: () => Promise<{ status: string; data: { calibrated: boolean; pixels_per_cm?: number; reference_length_cm?: number; calibration_date?: string } }>
     cancelCalibration: () => Promise<{ status: string; message: string }>
+    uploadCalibration: (calibrationData: {
+        pixels_per_cm: number
+        reference_length_cm: number
+        is_calibrated: boolean
+    }) => Promise<{ status: string; message: string; data?: any }>
     // Fetch image from Laravel API via main process (bypasses CORS)
     fetchLaravelImage: (articleStyle: string, size: string) => Promise<{
         status: string;

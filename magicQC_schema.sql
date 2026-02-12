@@ -142,6 +142,48 @@ CREATE TABLE IF NOT EXISTS measurement_results (
     UNIQUE KEY unique_measurement (purchase_order_article_id, measurement_id, size)
 );
 
+-- 12. Measurement Results Detailed (stores detailed measurements with side info for analytics)
+CREATE TABLE IF NOT EXISTS measurement_results_detailed (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    purchase_order_article_id INT NOT NULL,
+    measurement_id INT NOT NULL,
+    size VARCHAR(50) NOT NULL,
+    side ENUM('front', 'back') NOT NULL,
+    article_style VARCHAR(255),
+    measured_value DECIMAL(10, 2),
+    expected_value DECIMAL(10, 2),
+    tol_plus DECIMAL(10, 2),
+    tol_minus DECIMAL(10, 2),
+    status ENUM('PASS', 'FAIL', 'PENDING') DEFAULT 'PENDING',
+    operator_id INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (purchase_order_article_id) REFERENCES purchase_order_articles(id),
+    FOREIGN KEY (measurement_id) REFERENCES measurements(id),
+    FOREIGN KEY (operator_id) REFERENCES operators(id),
+    INDEX idx_article_size_side (purchase_order_article_id, size, side),
+    INDEX idx_article_style (article_style)
+);
+
+-- 13. Measurement Sessions (tracks complete measurement sessions for analytics)
+CREATE TABLE IF NOT EXISTS measurement_sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    purchase_order_article_id INT NOT NULL,
+    size VARCHAR(50) NOT NULL,
+    article_style VARCHAR(255),
+    operator_id INT,
+    front_side_complete TINYINT(1) DEFAULT 0,
+    back_side_complete TINYINT(1) DEFAULT 0,
+    front_qc_result ENUM('PASS', 'FAIL') NULL,
+    back_qc_result ENUM('PASS', 'FAIL') NULL,
+    completed_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (purchase_order_article_id) REFERENCES purchase_order_articles(id),
+    FOREIGN KEY (operator_id) REFERENCES operators(id),
+    UNIQUE KEY unique_session (purchase_order_article_id, size)
+);
+
 -- Seed some initial data for testing
 INSERT INTO brands (name) VALUES ('Nike'), ('Adidas'), ('Puma'), ('Uniqlo');
 INSERT INTO article_types (name) VALUES ('T-Shirt'), ('Polo Shirt'), ('Trouser'), ('Jacket');

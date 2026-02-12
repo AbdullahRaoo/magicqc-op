@@ -509,20 +509,36 @@ class CameraCalibrator:
 
 def main():
     """Main entry point"""
-    print("\n" + "=" * 60)
-    print("OPERATOR PANEL - CAMERA CALIBRATION WORKER")
-    print("=" * 60)
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Camera Calibration Worker')
+    parser.add_argument('--force-new', action='store_true', 
+                       help='Skip existing calibration check and create new')
+    parser.add_argument('--silent', action='store_true',
+                       help='Minimal console output')
+    args = parser.parse_args()
+    
+    if not args.silent:
+        print("\n" + "=" * 60)
+        print("OPERATOR PANEL - CAMERA CALIBRATION WORKER")
+        print("=" * 60)
     
     calibrator = CameraCalibrator()
     
-    # Check for existing calibration
-    if calibrator.load_calibration():
-        print("\n[?] Existing calibration found.")
-        print(f"    Scale: {calibrator.pixels_per_cm:.2f} pixels/cm")
-        response = input("Create new calibration? (y/n): ").strip().lower()
-        if response != 'y':
-            print("[OK] Using existing calibration.")
-            return 0
+    # Check for existing calibration (unless force-new)
+    if not args.force_new:
+        if calibrator.load_calibration():
+            print("\n[?] Existing calibration found.")
+            print(f"    Scale: {calibrator.pixels_per_cm:.2f} pixels/cm")
+            response = input("Create new calibration? (y/n): ").strip().lower()
+            if response != 'y':
+                print("[OK] Using existing calibration.")
+                return 0
+    else:
+        # Force new - just load existing data for reference but proceed with new calibration
+        calibrator.load_calibration()
+        if not args.silent:
+            print("[*] Force new calibration mode - skipping prompt")
     
     # Run calibration
     if calibrator.run_calibration():

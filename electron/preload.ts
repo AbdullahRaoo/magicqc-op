@@ -69,6 +69,11 @@ contextBridge.exposeInMainWorld('measurement', {
   startCalibration: () => ipcRenderer.invoke('measurement:startCalibration'),
   getCalibrationStatus: () => ipcRenderer.invoke('measurement:getCalibrationStatus'),
   cancelCalibration: () => ipcRenderer.invoke('measurement:cancelCalibration'),
+  uploadCalibration: (calibrationData: {
+    pixels_per_cm: number
+    reference_length_cm: number
+    is_calibrated: boolean
+  }) => ipcRenderer.invoke('measurement:uploadCalibration', calibrationData),
   // Fetch image from Laravel API (via main process to bypass CORS)
   fetchLaravelImage: (articleStyle: string, size: string) =>
     ipcRenderer.invoke('measurement:fetchLaravelImage', articleStyle, size),

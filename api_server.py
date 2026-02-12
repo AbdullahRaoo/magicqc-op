@@ -27,6 +27,9 @@ CORS(app)  # Enable CORS for Laravel communication
 LARAVEL_STORAGE_PATH = r'D:\RJM\magicQC\public\storage'
 ANNOTATIONS_PATH = os.path.join(LARAVEL_STORAGE_PATH, 'annotations')
 
+# Local annotation storage (fallback)
+LOCAL_ANNOTATIONS_PATH = os.path.join(os.path.dirname(__file__), 'temp_annotations')
+
 # Local storage for results
 LOCAL_STORAGE_PATH = os.path.join(os.path.dirname(__file__), 'storage')
 RESULTS_PATH = os.path.join(LOCAL_STORAGE_PATH, 'measurement_results')
@@ -35,6 +38,7 @@ CONFIG_FILE = 'measurement_config.json'
 # Ensure directories exist
 os.makedirs(LOCAL_STORAGE_PATH, exist_ok=True)
 os.makedirs(RESULTS_PATH, exist_ok=True)
+os.makedirs(LOCAL_ANNOTATIONS_PATH, exist_ok=True)
 
 # Global state
 measurement_process = None
@@ -270,13 +274,16 @@ def start_measurement():
                 }
                 ext = ext_map.get(image_mime_type, '.jpg')
                 
-                temp_image_path = os.path.join(temp_dir, f"{article_style}_{annotation_name}{ext}")
+                # Sanitize filenames to prevent directory issues (e.g. "6/7" -> "6_7")
+                safe_style = str(article_style).replace('/', '_').replace('\\', '_')
+                safe_name = str(annotation_name).replace('/', '_').replace('\\', '_')
+                temp_image_path = os.path.join(temp_dir, f"{safe_style}_{safe_name}{ext}")
                 
                 # Decode Base64 image data
                 image_bytes = base64.b64decode(image_data)
                 
                 # CRITICAL: Check if image needs to be upscaled to match keypoints
-                # Keypoints are now stored at native camera resolution (5488x3672)
+                # Keypoints are now stored at native camera resolution (5472x2752)
                 # but reference image from webcam is 1920x1080
                 import cv2
                 import numpy as np
@@ -289,8 +296,8 @@ def start_measurement():
                     actual_h, actual_w = img.shape[:2]
                     
                     # NATIVE CAMERA RESOLUTION - hardcode for MindVision camera
-                    NATIVE_WIDTH = 5488
-                    NATIVE_HEIGHT = 3672
+                    NATIVE_WIDTH = 5472
+                    NATIVE_HEIGHT = 2752
                     
                     # Use database values if they look correct, otherwise use native resolution
                     target_w = image_width if image_width and image_width > 1920 else NATIVE_WIDTH
@@ -298,7 +305,7 @@ def start_measurement():
                     
                     # BUGFIX: Detect if only width was scaled but not height (admin dashboard bug)
                     if target_w == NATIVE_WIDTH and target_h == 1080:
-                        print(f"[BUGFIX] Detected incomplete scaling in database (5488x1080)")
+                        print(f"[BUGFIX] Detected incomplete scaling in database ({NATIVE_WIDTH}x1080)")
                         print(f"[BUGFIX] Correcting target height from 1080 to {NATIVE_HEIGHT}")
                         target_h = NATIVE_HEIGHT
                     
@@ -339,7 +346,7 @@ def start_measurement():
                 }), 400
             
             # Build measurement annotation from database data
-            temp_json_path = os.path.join(temp_dir, f"{article_style}_{annotation_name}.json")
+            temp_json_path = os.path.join(temp_dir, f"{safe_style}_{safe_name}.json")
             try:
                 # Parse keypoints_pixels (already in correct format [[x, y], ...])
                 if isinstance(keypoints_pixels, str):
@@ -460,73 +467,202 @@ def start_measurement():
                     'message': f'Failed to process annotation data: {str(e)}'
                 }), 400
         
-        # PRIORITY 3: File-based annotation lookup (fallback)
-        if not annotation_json_path:
-            # Build annotation file paths using naming convention: {article_style}_{size}
-            # Files are stored as: NKE-TS-001_XXL.json and NKE-TS-001_XXL.jpg (or .png)
-            if article_style:
-                # Build file names: {article_style}_{size}
-                base_name = f"{article_style}_{annotation_name}"
-                json_file = os.path.join(ANNOTATIONS_PATH, f"{base_name}.json")
-                
-                # Check for image with various extensions
-                image_extensions = ['.jpg', '.jpeg', '.png', '.bmp']
-                image_file = None
-                for ext in image_extensions:
-                    potential_image = os.path.join(ANNOTATIONS_PATH, f"{base_name}{ext}")
+        # PRIORITY 2.5: Use keypoints from database but find image from local files
+        elif keypoints_pixels and not image_data:
+            print(f"[DB+FILE] Using keypoints from database + image from file for {article_style}_{annotation_name} ({side})")
+            
+            # First find the reference image from local files
+            temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'temp_annotations')
+            os.makedirs(temp_dir, exist_ok=True)
+            
+            safe_style = str(article_style).replace('/', '_').replace('\\', '_')
+            safe_name = str(annotation_name).replace('/', '_').replace('\\', '_')
+            
+            # Try to find reference image - first side-specific, then generic
+            search_dirs = [ANNOTATIONS_PATH, LOCAL_ANNOTATIONS_PATH]
+            found_image_path = None
+            
+            # Try side-specific: {article_style}_{size}_{side}.jpg
+            for search_dir in search_dirs:
+                if not os.path.exists(search_dir):
+                    continue
+                for ext in ['.jpg', '.jpeg', '.png', '.bmp']:
+                    potential_image = os.path.join(search_dir, f"{safe_style}_{safe_name}_{side}{ext}")
                     if os.path.exists(potential_image):
-                        image_file = potential_image
+                        found_image_path = potential_image
+                        break
+                if found_image_path:
+                    break
+            
+            # Try generic: {article_style}_{size}.jpg
+            if not found_image_path:
+                for search_dir in search_dirs:
+                    if not os.path.exists(search_dir):
+                        continue
+                    for ext in ['.jpg', '.jpeg', '.png', '.bmp']:
+                        potential_image = os.path.join(search_dir, f"{safe_style}_{safe_name}{ext}")
+                        if os.path.exists(potential_image):
+                            found_image_path = potential_image
+                            break
+                    if found_image_path:
+                        break
+            
+            if found_image_path:
+                reference_image_path = found_image_path
+                print(f"[DB+FILE] Found local reference image: {found_image_path}")
+                
+                # Build annotation JSON from database keypoints
+                try:
+                    if isinstance(keypoints_pixels, str):
+                        keypoints = json.loads(keypoints_pixels)
+                    else:
+                        keypoints = keypoints_pixels or []
+                    
+                    if isinstance(target_distances, str):
+                        targets = json.loads(target_distances) if target_distances else {}
+                    else:
+                        targets = target_distances or {}
+                    
+                    if isinstance(placement_box, str):
+                        box = json.loads(placement_box) if placement_box else []
+                    else:
+                        box = placement_box or []
+                    
+                    print(f"[DB+FILE] Loaded {len(keypoints)} keypoints from database")
+                    
+                    # Write annotation JSON to temp file
+                    temp_json_path = os.path.join(temp_dir, f"{safe_style}_{safe_name}_{side}.json")
+                    measurement_annotation = {
+                        'keypoints': keypoints,
+                        'target_distances': targets,
+                        'placement_box': box,
+                        'annotation_date': datetime.now().isoformat(),
+                        'source': 'database_with_local_image',
+                        'article_style': article_style,
+                        'size': annotation_name,
+                        'side': side
+                    }
+                    
+                    with open(temp_json_path, 'w') as f:
+                        json.dump(measurement_annotation, f, indent=4)
+                    annotation_json_path = temp_json_path
+                    print(f"[DB+FILE] Wrote annotation JSON to: {temp_json_path}")
+                    
+                except Exception as e:
+                    print(f"[ERR] Failed to process database keypoints: {e}")
+                    import traceback
+                    traceback.print_exc()
+            else:
+                print(f"[DB+FILE] No local reference image found, falling back to file-based lookup")
+        
+        # PRIORITY 3: File-based annotation lookup (fallback) - check multiple locations
+        if not annotation_json_path:
+            # Build annotation file paths using naming convention: {article_style}_{size}_{side}
+            # Or fallback to: {article_style}_{size} (same annotation for both sides)
+            if article_style:
+                # Sanitize article_style for filename
+                safe_style = str(article_style).replace('/', '_').replace('\\', '_')
+                safe_name = str(annotation_name).replace('/', '_').replace('\\', '_')
+                
+                # Try side-specific file first: {article_style}_{size}_{side}.json
+                base_name_with_side = f"{safe_style}_{safe_name}_{side}"
+                # Then fallback to generic: {article_style}_{size}.json
+                base_name_generic = f"{safe_style}_{safe_name}"
+                
+                # Check multiple directories: Laravel storage AND local temp_annotations
+                search_dirs = [ANNOTATIONS_PATH, LOCAL_ANNOTATIONS_PATH]
+                
+                # Try side-specific files first
+                for search_dir in search_dirs:
+                    if not os.path.exists(search_dir):
+                        continue
+                        
+                    json_file = os.path.join(search_dir, f"{base_name_with_side}.json")
+                    
+                    if os.path.exists(json_file):
+                        annotation_json_path = json_file
+                        
+                        # Check for image with various extensions
+                        for ext in ['.jpg', '.jpeg', '.png', '.bmp']:
+                            potential_image = os.path.join(search_dir, f"{base_name_with_side}{ext}")
+                            if os.path.exists(potential_image):
+                                reference_image_path = potential_image
+                                break
+                        
+                        print(f"[ANNOTATION] Found side-specific annotation ({side}): {json_file}")
+                        if reference_image_path:
+                            print(f"[ANNOTATION] Found side-specific reference image: {reference_image_path}")
                         break
                 
-                if os.path.exists(json_file):
-                    annotation_json_path = json_file
-                    reference_image_path = image_file
-                    print(f"[ANNOTATION] Found annotation: {json_file}")
-                    if image_file:
-                        print(f"[ANNOTATION] Found reference image: {image_file}")
-                    else:
-                        print(f"[ANNOTATION] Warning: No reference image found for {base_name}")
+                # If no side-specific file, try generic file (use same for front and back)
+                if not annotation_json_path:
+                    for search_dir in search_dirs:
+                        if not os.path.exists(search_dir):
+                            continue
+                            
+                        json_file = os.path.join(search_dir, f"{base_name_generic}.json")
+                        
+                        if os.path.exists(json_file):
+                            annotation_json_path = json_file
+                            
+                            # Check for image with various extensions
+                            for ext in ['.jpg', '.jpeg', '.png', '.bmp']:
+                                potential_image = os.path.join(search_dir, f"{base_name_generic}{ext}")
+                                if os.path.exists(potential_image):
+                                    reference_image_path = potential_image
+                                    break
+                            
+                            print(f"[ANNOTATION] Found generic annotation (for {side}): {json_file}")
+                            if reference_image_path:
+                                print(f"[ANNOTATION] Found generic reference image: {reference_image_path}")
+                            break
         
         # Fallback: Try size-only naming (backward compatible)
         if not annotation_json_path:
             base_name = annotation_name
-            json_file = os.path.join(ANNOTATIONS_PATH, f"{base_name}.json")
             
-            if os.path.exists(json_file):
-                annotation_json_path = json_file
-                # Check for image
-                for ext in ['.jpg', '.jpeg', '.png', '.bmp']:
-                    potential_image = os.path.join(ANNOTATIONS_PATH, f"{base_name}{ext}")
-                    if os.path.exists(potential_image):
-                        reference_image_path = potential_image
-                        break
-                print(f"[ANNOTATION] Using size-only annotation: {json_file}")
+            for search_dir in [ANNOTATIONS_PATH, LOCAL_ANNOTATIONS_PATH]:
+                if not os.path.exists(search_dir):
+                    continue
+                    
+                json_file = os.path.join(search_dir, f"{base_name}.json")
+                
+                if os.path.exists(json_file):
+                    annotation_json_path = json_file
+                    # Check for image
+                    for ext in ['.jpg', '.jpeg', '.png', '.bmp']:
+                        potential_image = os.path.join(search_dir, f"{base_name}{ext}")
+                        if os.path.exists(potential_image):
+                            reference_image_path = potential_image
+                            break
+                    print(f"[ANNOTATION] Using size-only annotation: {json_file}")
+                    break
         
-        # Also check folder-based structure as second fallback
+        # Also check folder-based structure as additional fallback
         if not annotation_json_path:
-            # Try folder structure: annotations/{article_style}/{size}/front_annotation.json
+            # Try folder structure: annotations/{article_style}/{size}/{side}_annotation.json
             if article_style:
                 folder_path = os.path.join(ANNOTATIONS_PATH, article_style, annotation_name)
-                folder_json = os.path.join(folder_path, 'front_annotation.json')
-                folder_image = os.path.join(folder_path, 'front_reference.jpg')
+                folder_json = os.path.join(folder_path, f'{side}_annotation.json')
+                folder_image = os.path.join(folder_path, f'{side}_reference.jpg')
                 
                 if os.path.exists(folder_json):
                     annotation_json_path = folder_json
                     if os.path.exists(folder_image):
                         reference_image_path = folder_image
-                    print(f"[ANNOTATION] Using folder-based annotation: {folder_json}")
+                    print(f"[ANNOTATION] Using folder-based annotation ({side}): {folder_json}")
             
             # Try size-only folder
             if not annotation_json_path:
                 folder_path = os.path.join(ANNOTATIONS_PATH, annotation_name)
-                folder_json = os.path.join(folder_path, 'front_annotation.json')
-                folder_image = os.path.join(folder_path, 'front_reference.jpg')
+                folder_json = os.path.join(folder_path, f'{side}_annotation.json')
+                folder_image = os.path.join(folder_path, f'{side}_reference.jpg')
                 
                 if os.path.exists(folder_json):
                     annotation_json_path = folder_json
                     if os.path.exists(folder_image):
                         reference_image_path = folder_image
-                    print(f"[ANNOTATION] Using size folder annotation: {folder_json}")
+                    print(f"[ANNOTATION] Using size folder annotation ({side}): {folder_json}")
         
         if not annotation_json_path:
             return jsonify({
@@ -564,21 +700,28 @@ def start_measurement():
         def run_measurement():
             global measurement_process, measurement_status
             try:
-                # Run the measurement script - needs console for OpenCV to work properly
+                # Run the measurement script - OpenCV GUI needs visible window
                 import platform
                 
                 if platform.system() == 'Windows':
-                    # On Windows, spawn new console window for camera GUI to work
+                    # On Windows, use CREATE_NEW_CONSOLE to:
+                    # 1. Show a visible console window for debugging
+                    # 2. Allow OpenCV GUI windows to display
+                    # This makes it easier to see errors and camera output
                     measurement_process = subprocess.Popen(
                         ['python', 'measurement_worker.py'],
                         creationflags=subprocess.CREATE_NEW_CONSOLE,
-                        env={**os.environ, 'PYTHONIOENCODING': 'utf-8'}
+                        env={**os.environ, 'PYTHONIOENCODING': 'utf-8'},
+                        cwd=os.path.dirname(os.path.abspath(__file__))
                     )
+                    print(f"[MEASUREMENT] Started measurement_worker.py with PID: {measurement_process.pid}")
+                    print(f"[MEASUREMENT] A new console window should open showing measurement progress")
                 else:
                     # On other platforms, run normally
                     measurement_process = subprocess.Popen(
                         ['python', 'measurement_worker.py'],
-                        env={**os.environ, 'PYTHONIOENCODING': 'utf-8'}
+                        env={**os.environ, 'PYTHONIOENCODING': 'utf-8'},
+                        cwd=os.path.dirname(os.path.abspath(__file__))
                     )
                 
                 measurement_status['status'] = 'running'
@@ -759,7 +902,8 @@ def get_calibration_status():
             'data': {
                 'calibrated': calibration_data.get('is_calibrated', False),
                 'pixels_per_cm': calibration_data.get('pixels_per_cm', 0),
-                'reference_length_cm': calibration_data.get('reference_length_cm', 0)
+                'reference_length_cm': calibration_data.get('reference_length_cm', 0),
+                'calibration_date': calibration_data.get('calibration_date', None)
             }
         })
     else:
@@ -770,6 +914,47 @@ def get_calibration_status():
             }
         })
 
+@app.route('/api/calibration/upload', methods=['POST'])
+def upload_calibration():
+    """Upload a calibration JSON file"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        if not data:
+            return jsonify({'status': 'error', 'message': 'No data provided'})
+        
+        pixels_per_cm = data.get('pixels_per_cm')
+        reference_length_cm = data.get('reference_length_cm', 0)
+        is_calibrated = data.get('is_calibrated', False)
+        
+        if not pixels_per_cm or float(pixels_per_cm) <= 0:
+            return jsonify({'status': 'error', 'message': 'Invalid pixels_per_cm value. Must be a positive number.'})
+        
+        # Save to camera_calibration.json
+        calibration_data = {
+            'pixels_per_cm': float(pixels_per_cm),
+            'reference_length_cm': float(reference_length_cm) if reference_length_cm else 0,
+            'is_calibrated': bool(is_calibrated),
+            'calibration_date': datetime.now().isoformat()
+        }
+        
+        with open('camera_calibration.json', 'w') as f:
+            json.dump(calibration_data, f, indent=4)
+        
+        print(f"[CALIBRATION] Uploaded calibration: {calibration_data}")
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Calibration uploaded successfully',
+            'data': calibration_data
+        })
+    except ValueError as e:
+        return jsonify({'status': 'error', 'message': f'Invalid number format: {str(e)}'})
+    except Exception as e:
+        print(f"[CALIBRATION] Upload error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)})
+
 # Global state for calibration process
 calibration_process = None
 calibration_status = {
@@ -777,6 +962,7 @@ calibration_status = {
     'status': 'idle',
     'error': None
 }
+
 
 @app.route('/api/calibration/start', methods=['POST'])
 def start_calibration():
@@ -806,13 +992,13 @@ def start_calibration():
             import platform
             if platform.system() == 'Windows':
                 calibration_process = subprocess.Popen(
-                    ['python', 'calibration_worker.py'],
+                    ['python', 'calibration_worker.py', '--force-new'],
                     creationflags=subprocess.CREATE_NEW_CONSOLE,
                     env={**os.environ, 'PYTHONIOENCODING': 'utf-8'}
                 )
             else:
                 calibration_process = subprocess.Popen(
-                    ['python', 'calibration_worker.py'],
+                    ['python', 'calibration_worker.py', '--force-new'],
                     env={**os.environ, 'PYTHONIOENCODING': 'utf-8'}
                 )
             

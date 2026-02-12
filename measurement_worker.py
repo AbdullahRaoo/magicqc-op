@@ -89,14 +89,16 @@ def run_headless_measurement():
             print("[ERR] Failed to load annotation")
             sys.exit(1)
             
-        # Start matching
-        print(f"[LIVE] Starting measurement loop...")
-        measurer.transfer_keypoints_to_live()
+        # Start matching - HEADLESS mode (no interactive prompts)
+        print(f"[LIVE] Starting measurement loop (HEADLESS MODE)...")
+        measurer.transfer_keypoints_to_live(headless=True)
         
     except Exception as e:
         print(f"[FATAL] Worker crash: {e}")
         import traceback
         traceback.print_exc()
+        print("\n[PAUSE] Worker crashed. Press Enter to close window...")
+        input()
         sys.exit(1)
 
 if __name__ == "__main__":
