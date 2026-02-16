@@ -5,6 +5,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { spawn, ChildProcess } from 'node:child_process'
 import { initializeDatabase, closeDatabase, query, queryOne, execute } from './database'
+import { PYTHON_API_URL, LARAVEL_API_URL } from './apiConfig'
 
 // Get __dirname equivalent for ES modules
 const __filename = fileURLToPath(import.meta.url)
@@ -95,7 +96,7 @@ async function startPythonServer(): Promise<boolean> {
 async function waitForPythonServer(maxRetries = 30, delay = 500): Promise<boolean> {
   for (let i = 0; i < maxRetries; i++) {
     try {
-      const response = await fetch('http://localhost:5000/health')
+      const response = await fetch(`${PYTHON_API_URL}/health`)
       if (response.ok) {
         console.log('✅ Python API server is ready')
         return true
@@ -182,9 +183,13 @@ function setupCSP() {
   // In production builds, this will be more restrictive
   const isDev = !!VITE_DEV_SERVER_URL
 
+  // Build CSP allowing the Python API and Laravel API origins dynamically
+  const pythonOrigin = PYTHON_API_URL   // e.g. http://localhost:5000
+  const laravelOrigin = LARAVEL_API_URL // e.g. http://127.0.0.1:8000
+
   const csp = isDev
-    ? "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* ws://localhost:* wss://localhost:*; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' http://localhost:* ws://localhost:* wss://localhost:*; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none';"
-    : "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https: blob:; connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none';"
+    ? `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* ws://localhost:* wss://localhost:*; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' ${pythonOrigin} ${laravelOrigin} http://localhost:* ws://localhost:* wss://localhost:*; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none';`
+    : `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https: blob:; connect-src 'self' ${pythonOrigin} ${laravelOrigin}; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none';`
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
@@ -314,7 +319,7 @@ function setupDatabaseHandlers() {
 
 // Set up IPC handlers for measurement operations
 function setupMeasurementHandlers() {
-  const PYTHON_API_URL = 'http://localhost:5000'
+  // PYTHON_API_URL is imported from apiConfig.ts (reads from .env)
 
   // Helper function to make API calls with retry
   async function fetchWithRetry(url: string, options?: RequestInit, maxRetries = 3): Promise<Response> {
@@ -500,7 +505,7 @@ function setupMeasurementHandlers() {
 
   // Fetch reference image from Laravel API (bypasses CORS in renderer)
   ipcMain.handle('measurement:fetchLaravelImage', async (_event, articleStyle: string, size: string) => {
-    const LARAVEL_API_URL = 'http://127.0.0.1:8000'
+    // LARAVEL_API_URL is imported from apiConfig.ts (reads from .env)
     const imageApiUrl = `${LARAVEL_API_URL}/api/uploaded-annotations/fetch-image-base64?article_style=${encodeURIComponent(articleStyle)}&size=${encodeURIComponent(size)}`
 
     console.log('[MAIN] Fetching Laravel image:', imageApiUrl)

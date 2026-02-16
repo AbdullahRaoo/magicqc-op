@@ -14,6 +14,13 @@ import subprocess
 import signal
 import psutil
 
+# ── Load .env for centralised configuration ──
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
+except ImportError:
+    pass  # dotenv not installed — fall back to OS-level env vars
+
 # ── File-based logging for api_server itself ──
 from worker_logger import setup_file_logging
 _logger = setup_file_logging('api_server')
@@ -52,7 +59,8 @@ app = Flask(__name__)
 CORS(app)  # Enable CORS for Laravel communication
 
 # Configuration - Use Laravel magicQC storage for annotations
-LARAVEL_STORAGE_PATH = r'D:\RJM\magicQC\public\storage'
+# Read from .env → LARAVEL_STORAGE_PATH (centralised, no hardcoded paths)
+LARAVEL_STORAGE_PATH = os.environ.get('LARAVEL_STORAGE_PATH', r'D:\RJM\magicQC\public\storage')
 ANNOTATIONS_PATH = os.path.join(LARAVEL_STORAGE_PATH, 'annotations')
 
 # Local annotation storage (fallback)
@@ -1350,6 +1358,9 @@ def cancel_registration():
         }), 500
 
 if __name__ == '__main__':
+    # Read port from .env → PYTHON_API_PORT (centralised)
+    API_PORT = int(os.environ.get('PYTHON_API_PORT', '5000'))
+
     print("=" * 60)
     print("[START] CAMERA MEASUREMENT API SERVER")
     print("=" * 60)
@@ -1361,7 +1372,7 @@ if __name__ == '__main__':
     
     ensure_directories()
     
-    print("\n[OK] Server starting on http://localhost:5000")
+    print(f"\n[OK] Server starting on http://0.0.0.0:{API_PORT}")
     print("[API] Laravel can now communicate with the measurement system\n")
     
-    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
+    app.run(host='0.0.0.0', port=API_PORT, debug=True, use_reloader=False)

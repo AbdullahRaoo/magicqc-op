@@ -1,10 +1,10 @@
 {
     "annotation_name": "S",
     "article_style": "T-Shirt",
-    "annotation_json_path": "D:\\RJM\\operatorPannel-main\\temp_annotations\\T-Shirt_S-z.json",
-    "reference_image_path": "D:\\RJM\\operatorPannel-main\\temp_annotations\\T-Shirt_S-z.jpg",
+    "annotation_json_path": "D:\\RJM\\operatorPannel-main\\temp_annotations\\T-Shirt_S-b.json",
+    "reference_image_path": "D:\\RJM\\operatorPannel-main\\temp_annotations\\T-Shirt_S-b.jpg",
     "side": "front",
-    "garment_color": "other",
+    "garment_color": "black",
     "laravel_storage": "D:\\RJM\\magicQC\\public\\storage",
     "results_path": "D:\\RJM\\operatorPannel-main\\storage\\measurement_results",
     "measurement_specs": [
