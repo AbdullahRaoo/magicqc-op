@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, session } from 'electron'
 import bcrypt from 'bcryptjs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import fs from 'node:fs'
 import { spawn, ChildProcess } from 'node:child_process'
 import { initializeDatabase, closeDatabase, query, queryOne, execute } from './database'
 
@@ -29,6 +30,7 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 
 let win: BrowserWindow | null
 let pythonProcess: ChildProcess | null = null
+let pythonLogStream: fs.WriteStream | null = null
 
 // Start Python API server automatically
 async function startPythonServer(): Promise<boolean> {
@@ -36,31 +38,47 @@ async function startPythonServer(): Promise<boolean> {
     const pythonScript = path.join(process.env.APP_ROOT!, 'api_server.py')
     console.log('🐍 Starting Python API server:', pythonScript)
 
+    // Ensure logs directory exists and open a write-stream for Python output
+    const logsDir = path.join(process.env.APP_ROOT!, 'logs')
+    if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true })
+    const logPath = path.join(logsDir, 'python_server.log')
+    pythonLogStream = fs.createWriteStream(logPath, { flags: 'a' })
+    pythonLogStream.write(`\n${'='.repeat(60)}\n[${new Date().toISOString()}] Python server starting\n${'='.repeat(60)}\n`)
+
     try {
-      // Spawn Python process (hidden, no console window)
+      // Spawn Python process – fully hidden, no console window for the operator.
+      // stdout/stderr are piped so we can write them to the log file.
       pythonProcess = spawn('python', [pythonScript], {
         cwd: process.env.APP_ROOT,
         stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true, // Hide console window on Windows
+        windowsHide: true, // Sets STARTF_USESHOWWINDOW + SW_HIDE on Windows
+        shell: false,
         detached: false
       })
 
-      pythonProcess.stdout?.on('data', (data) => {
-        console.log(`[Python] ${data.toString().trim()}`)
+      // Drain stdout/stderr → log file (never shown to the operator)
+      pythonProcess.stdout?.on('data', (data: Buffer) => {
+        const text = data.toString().trim()
+        pythonLogStream?.write(`[OUT] ${text}\n`)
       })
 
-      pythonProcess.stderr?.on('data', (data) => {
-        console.error(`[Python Error] ${data.toString().trim()}`)
+      pythonProcess.stderr?.on('data', (data: Buffer) => {
+        const text = data.toString().trim()
+        pythonLogStream?.write(`[ERR] ${text}\n`)
       })
 
       pythonProcess.on('error', (err) => {
-        console.error('❌ Failed to start Python server:', err)
+        const msg = `❌ Failed to start Python server: ${err}`
+        console.error(msg)
+        pythonLogStream?.write(`${msg}\n`)
         pythonProcess = null
         resolve(false)
       })
 
       pythonProcess.on('exit', (code) => {
-        console.log(`🐍 Python server exited with code ${code}`)
+        const msg = `🐍 Python server exited with code ${code}`
+        console.log(msg)
+        pythonLogStream?.write(`${msg}\n`)
         pythonProcess = null
       })
 
@@ -106,6 +124,12 @@ function stopPythonServer() {
       console.error('Error stopping Python server:', error)
     }
     pythonProcess = null
+  }
+  // Close the log file stream
+  if (pythonLogStream) {
+    pythonLogStream.write(`[${new Date().toISOString()}] Python server stopped\n`)
+    pythonLogStream.end()
+    pythonLogStream = null
   }
 }
 
@@ -313,6 +337,8 @@ function setupMeasurementHandlers() {
     annotation_name: string;
     article_style?: string;
     side?: string;
+    garment_color?: string;
+    color_code?: string;
     // New measurement-ready data from database
     keypoints_pixels?: string | null;
     target_distances?: string | null;

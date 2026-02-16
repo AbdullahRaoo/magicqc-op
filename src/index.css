@@ -337,6 +337,18 @@
     color: #f1f5f9 !important;
 }
 
+/* Slide-in animation for error toasts */
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
 /* Dark mode popup/modal */
 .dark .bg-black\/40 {
     background-color: rgba(0, 0, 0, 0.6) !important;

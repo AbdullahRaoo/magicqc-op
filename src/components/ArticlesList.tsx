@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import type {
   ArticleWithRelations,
@@ -31,8 +31,34 @@ export function ArticlesList() {
   // Basic states
   const [error, setError] = useState<string | null>(null)
 
+  // Article color selection state
+  const [selectedColor, setSelectedColor] = useState<'white' | 'other' | 'black' | null>(null)
+
+  // Unit display toggle: 'cm' (default) or 'inch' — purely visual, all internal values stay in cm
+  const [displayUnit, setDisplayUnit] = useState<'cm' | 'inch'>('cm')
+  const CM_TO_INCH = 0.393701
+  /** Convert a cm numeric value to the active display unit, rounded to 2 decimals */
+  const toDisplayUnit = (cmValue: number): string => {
+    if (displayUnit === 'inch') return (cmValue * CM_TO_INCH).toFixed(2)
+    return cmValue.toFixed(2)
+  }
+  /** Display label for tolerance: ±val in current unit */
+  const tolDisplay = (cmValue: number): string => {
+    if (displayUnit === 'inch') return (cmValue * CM_TO_INCH).toFixed(2)
+    return cmValue.toFixed(2)
+  }
+
+  // Auto-dismiss error after 6 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(null), 6000)
+      return () => clearTimeout(timer)
+    }
+  }, [error])
+
   // Selection states
   const [brands, setBrands] = useState<Brand[]>([])
+  const [failedLogos, setFailedLogos] = useState<Set<number>>(new Set())
   const [articleTypes, setArticleTypes] = useState<ArticleType[]>([])
   const [articles, setArticles] = useState<ArticleWithRelations[]>([])
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([])
@@ -61,11 +87,19 @@ export function ArticlesList() {
   const [measurementComplete, setMeasurementComplete] = useState(false)
   const [editableTols, setEditableTols] = useState<Record<number, { tol_plus: string; tol_minus: string }>>({})
 
+  // Measurement tick selection - tracks which measurements are selected for live camera measurement
+  const [selectedMeasurementIds, setSelectedMeasurementIds] = useState<Set<number>>(new Set())
+  const selectedMeasurementIdsRef = useRef<Set<number>>(new Set())
+
+  // Auto-shift lock: true = measurement mode active, rows are sorted (selected first)
+  const [isShiftLocked, setIsShiftLocked] = useState(false)
+
   // Current PO articles for navigation
   const [currentPOArticleIndex, setCurrentPOArticleIndex] = useState(0)
 
   // Saving state
   const [isSaving, setIsSaving] = useState(false)
+  const [isSavingNextArticle, setIsSavingNextArticle] = useState(false)
 
   // Calibration state
   const [calibrationStatus, setCalibrationStatus] = useState<{
@@ -86,6 +120,10 @@ export function ArticlesList() {
   const [backMeasuredValues, setBackMeasuredValues] = useState<Record<number, string>>({})
   const [frontSideComplete, setFrontSideComplete] = useState(false)
   const [backSideComplete, setBackSideComplete] = useState(false)
+
+  // Per-side snapshot of which POM IDs were checked at measurement time
+  const [frontSelectedIds, setFrontSelectedIds] = useState<Set<number>>(new Set())
+  const [backSelectedIds, setBackSelectedIds] = useState<Set<number>>(new Set())
   
   // QC check tracking for each side
   const [frontQCChecked, setFrontQCChecked] = useState(false)
@@ -237,6 +275,23 @@ export function ArticlesList() {
     }
   }, [measuredValues, isPollingActive])
 
+  // Auto-select all measurements when specs change
+  useEffect(() => {
+    if (measurementSpecs.length > 0) {
+      const allIds = new Set(measurementSpecs.map(s => s.id))
+      setSelectedMeasurementIds(allIds)
+      selectedMeasurementIdsRef.current = allIds
+    } else {
+      setSelectedMeasurementIds(new Set())
+      selectedMeasurementIdsRef.current = new Set()
+    }
+  }, [measurementSpecs])
+
+  // Keep ref in sync with state for use in polling interval
+  useEffect(() => {
+    selectedMeasurementIdsRef.current = selectedMeasurementIds
+  }, [selectedMeasurementIds])
+
   // Poll for live results when polling is active
   useEffect(() => {
     let intervalId: ReturnType<typeof setInterval>
@@ -259,6 +314,8 @@ export function ArticlesList() {
               name: string
               actual_cm: number
               qc_passed: boolean
+              spec_id?: number
+              spec_code?: string
             }>
 
             console.log('[POLLING] Received', liveData.length, 'live measurements, is_live:', result.data.is_live)
@@ -267,20 +324,35 @@ export function ArticlesList() {
               const newValues = { ...prev }
               let updated = false
 
-              // Match live measurements to specs by their position
-              // Live measurement id=1 corresponds to first spec (index 0)
-              // Live measurement id=2 corresponds to second spec (index 1)
-              // etc.
               liveData.forEach((liveMeasurement) => {
-                // Use liveMeasurement.id - 1 as the index into measurementSpecs
-                const specIndex = liveMeasurement.id - 1
+                let spec: typeof measurementSpecs[0] | undefined
 
-                if (specIndex >= 0 && specIndex < measurementSpecs.length) {
-                  const spec = measurementSpecs[specIndex]
+                // PRIMARY MATCH: by spec_id (database ID) - most reliable
+                if (liveMeasurement.spec_id) {
+                  spec = measurementSpecs.find(s => s.id === liveMeasurement.spec_id)
+                }
+
+                // SECONDARY MATCH: by spec_code (e.g., 'A', 'B')
+                if (!spec && liveMeasurement.spec_code) {
+                  spec = measurementSpecs.find(s => s.code === liveMeasurement.spec_code)
+                }
+
+                // FALLBACK MATCH: by pair position (id - 1 as index into specs)
+                if (!spec) {
+                  const specIndex = liveMeasurement.id - 1
+                  if (specIndex >= 0 && specIndex < measurementSpecs.length) {
+                    spec = measurementSpecs[specIndex]
+                  }
+                }
+
+                if (spec) {
+                  // Only update selected (ticked) measurements with live camera values
+                  if (!selectedMeasurementIdsRef.current.has(spec.id)) return
+
                   const newValue = liveMeasurement.actual_cm.toFixed(2)
 
                   if (newValues[spec.id] !== newValue) {
-                    console.log(`[POLLING] Spec[${specIndex}] ${spec.code} (id=${spec.id}): ${prev[spec.id] || 'empty'} -> ${newValue} cm`)
+                    console.log(`[POLLING] ${spec.code} "${spec.measurement}" (id=${spec.id}): ${prev[spec.id] || 'empty'} -> ${newValue} cm`)
                     newValues[spec.id] = newValue
                     updated = true
                   }
@@ -737,6 +809,19 @@ export function ArticlesList() {
     await fetchMeasurementSpecsForArticle(selectedPOArticleId, selectedSize)
   }
 
+  // Toggle measurement selection for tick indicator — VISUAL ONLY, no value changes
+  const toggleMeasurementSelection = (specId: number) => {
+    setSelectedMeasurementIds(prev => {
+      const next = new Set(prev)
+      if (next.has(specId)) {
+        next.delete(specId)
+      } else {
+        next.add(specId)
+      }
+      return next
+    })
+  }
+
   const handleMeasuredValueChange = (measurementId: number, value: string) => {
     // Allow empty, numbers, and decimal points
     if (value !== '' && !/^-?\d*\.?\d*$/.test(value)) return
@@ -773,15 +858,14 @@ export function ArticlesList() {
     })
   }
 
-  // Direct status calculation - called inline to ensure fresh values
+  // Direct status calculation - always uses cm internally (measuredValues are always in cm)
   const calculateStatus = (spec: MeasurementSpec): 'PASS' | 'FAIL' | 'PENDING' => {
     const valueStr = measuredValues[spec.id]
     if (!valueStr || valueStr === '') return 'PENDING'
-    const value = parseFloat(valueStr)
-    if (isNaN(value)) return 'PENDING'
+    const valueCm = parseFloat(valueStr) // Always cm
+    if (isNaN(valueCm)) return 'PENDING'
 
-    // Use editable tolerances if available, otherwise use spec defaults
-    // Ensure all values are numbers (could be strings from database)
+    // Tolerances are always stored/edited in cm
     const tols = editableTols[spec.id]
     const tolPlus = tols ? (parseFloat(tols.tol_plus) || parseFloat(String(spec.tol_plus)) || 0) : (parseFloat(String(spec.tol_plus)) || 0)
     const tolMinus = tols ? (parseFloat(tols.tol_minus) || parseFloat(String(spec.tol_minus)) || 0) : (parseFloat(String(spec.tol_minus)) || 0)
@@ -790,10 +874,7 @@ export function ArticlesList() {
     const minValid = expectedValue - tolMinus
     const maxValid = expectedValue + tolPlus
 
-    const isPass = value >= minValid && value <= maxValid
-
-    // Debug logging
-    console.log(`[STATUS] ${spec.code}: measured=${value}, expected=${expectedValue}, tol±=${tolPlus}, range=[${minValid.toFixed(2)}, ${maxValid.toFixed(2)}] → ${isPass ? 'PASS' : 'FAIL'}`)
+    const isPass = valueCm >= minValid && valueCm <= maxValid
 
     return isPass ? 'PASS' : 'FAIL'
   }
@@ -841,9 +922,32 @@ export function ArticlesList() {
         return
       }
 
+      // Validation passed — NOW lock auto-shift and prepare values
+      setIsShiftLocked(true)
+
+      // Auto-fill unselected measurements with expected values, clear selected for live update
+      const updatedValues: Record<number, string> = { ...measuredValues }
+      measurementSpecs.forEach(spec => {
+        if (selectedMeasurementIds.has(spec.id)) {
+          updatedValues[spec.id] = '' // Clear for live measurement
+        } else {
+          updatedValues[spec.id] = String(spec.expected_value) // Fill with spec value
+        }
+      })
+      setMeasuredValues(updatedValues)
+
       console.log('[MEASUREMENT] Starting measurement for:', articleStyle, 'size:', selectedSize, 'side:', side)
 
-      // ============== Try to fetch annotation + image from database ==============
+      // ============== COLOR-AWARE annotation fetch from database ==============
+      // Color code mapping: white → 'w', black → 'b', other/null → 'z'
+      const colorCodeMap: Record<string, string> = { white: 'w', black: 'b', other: 'z' }
+      const garmentColor = selectedColor || 'other'
+      const colorCode = colorCodeMap[garmentColor] || 'z'
+      const colorSuffixedStyle = `${articleStyle}-${colorCode}`
+
+      console.log(`[MEASUREMENT] Garment color: ${garmentColor} → code: ${colorCode}`)
+      console.log(`[MEASUREMENT] Color-suffixed style: ${colorSuffixedStyle}`)
+
       let keypointsPixels: number[][] = []
       let targetDistances: Record<string, number> = {}
       let placementBox: number[] | null = null
@@ -852,27 +956,86 @@ export function ArticlesList() {
       let imageWidth = 5472  // Default to camera native resolution
       let imageHeight = 2752
       let useLocalFiles = false
+      let matchedColorCode = colorCode  // Track which color was actually matched
+
+      type AnnotationRow = {
+        id: number
+        article_style: string
+        size: string
+        annotation_data: string
+        image_width: number
+        image_height: number
+        reference_image_data: string
+        reference_image_mime_type: string
+      }
 
       try {
-        const annotationResult = await window.database.query<{
-          id: number
-          article_style: string
-          size: string
-          annotation_data: string
-          image_width: number
-          image_height: number
-          reference_image_data: string
-          reference_image_mime_type: string
-        }>(
-          `SELECT id, article_style, size, annotation_data, image_width, image_height, reference_image_data, reference_image_mime_type
-           FROM uploaded_annotations 
-           WHERE article_style = ? AND size = ? AND side = ?`,
-          [articleStyle, selectedSize, side]
-        )
+        let dbAnnotation: AnnotationRow | null = null
 
-        if (annotationResult.success && annotationResult.data && annotationResult.data.length > 0) {
-          const dbAnnotation = annotationResult.data[0]
-          console.log('[MEASUREMENT] Found annotation in database, ID:', dbAnnotation.id)
+        // --- TIER 1: Exact color match (e.g. article_style = 'ML-4455-w') ---
+        console.log(`[FETCH T1] Trying exact color match: article_style='${colorSuffixedStyle}', size='${selectedSize}', side='${side}'`)
+        const tier1 = await window.database.query<AnnotationRow>(
+          `SELECT id, article_style, size, annotation_data, image_width, image_height, reference_image_data, reference_image_mime_type
+           FROM uploaded_annotations
+           WHERE article_style = ? AND size = ? AND side = ?
+           LIMIT 1`,
+          [colorSuffixedStyle, selectedSize, side]
+        )
+        if (tier1.success && tier1.data && tier1.data.length > 0) {
+          dbAnnotation = tier1.data[0]
+          console.log(`[FETCH T1] ✓ Exact color match found, DB ID: ${dbAnnotation.id}`)
+        }
+
+        // --- TIER 2: Any color variant for same base style ---
+        if (!dbAnnotation) {
+          console.log(`[FETCH T2] Trying any color variant for base style '${articleStyle}'`)
+          // Try all 3 color suffixes in preference order: requested → others
+          const allCodes = ['w', 'b', 'z']
+          const orderedCodes = [colorCode, ...allCodes.filter(c => c !== colorCode)]
+          for (const tryCode of orderedCodes) {
+            const tryStyle = `${articleStyle}-${tryCode}`
+            const tier2 = await window.database.query<AnnotationRow>(
+              `SELECT id, article_style, size, annotation_data, image_width, image_height, reference_image_data, reference_image_mime_type
+               FROM uploaded_annotations
+               WHERE article_style = ? AND size = ? AND side = ?
+               LIMIT 1`,
+              [tryStyle, selectedSize, side]
+            )
+            if (tier2.success && tier2.data && tier2.data.length > 0) {
+              dbAnnotation = tier2.data[0]
+              matchedColorCode = tryCode
+              console.log(`[FETCH T2] ✓ Color variant '${tryCode}' matched, DB ID: ${dbAnnotation.id}`)
+              break
+            }
+          }
+        }
+
+        // --- TIER 2.5: Try base style without any color suffix (legacy records) ---
+        if (!dbAnnotation) {
+          console.log(`[FETCH T2.5] Trying base style without color suffix: '${articleStyle}'`)
+          const tier25 = await window.database.query<AnnotationRow>(
+            `SELECT id, article_style, size, annotation_data, image_width, image_height, reference_image_data, reference_image_mime_type
+             FROM uploaded_annotations
+             WHERE article_style = ? AND size = ? AND side = ?
+             LIMIT 1`,
+            [articleStyle, selectedSize, side]
+          )
+          if (tier25.success && tier25.data && tier25.data.length > 0) {
+            dbAnnotation = tier25.data[0]
+            matchedColorCode = colorCode  // Use selected color for file naming
+            console.log(`[FETCH T2.5] ✓ Legacy (no-color) record found, DB ID: ${dbAnnotation.id}`)
+          }
+        }
+
+        // --- TIER 3: No DB record → fall back to local/camera annotation files ---
+        if (!dbAnnotation) {
+          console.log('[FETCH T3] No annotation in database for any color variant, will use local files')
+          useLocalFiles = true
+        }
+
+        // Parse the matched DB annotation
+        if (dbAnnotation) {
+          console.log('[MEASUREMENT] Using DB annotation ID:', dbAnnotation.id, 'style:', dbAnnotation.article_style)
 
           // Parse annotation_data
           const annotationData = typeof dbAnnotation.annotation_data === 'string'
@@ -937,9 +1100,6 @@ export function ArticlesList() {
           imageHeight = dbAnnotation.image_height || 2752
 
           console.log('[MEASUREMENT] Parsed from DB:', keypointsPixels.length, 'keypoints,', Object.keys(targetDistances).length, 'targets')
-        } else {
-          console.log('[MEASUREMENT] No annotation in database, will use local files')
-          useLocalFiles = true
         }
       } catch (err) {
         console.warn('[MEASUREMENT] Database query error:', err)
@@ -951,18 +1111,32 @@ export function ArticlesList() {
       console.log('  - Keypoints:', keypointsPixels.length)
       console.log('  - Target distances:', Object.keys(targetDistances).length)
       console.log('  - Use local files:', useLocalFiles)
+      console.log('  - Measurement specs:', measurementSpecs.length)
+      console.log('  - Color code:', matchedColorCode, `(requested: ${colorCode})`)
+
+      // Build measurement_specs array so the CV engine can tag each pair with the correct spec info
+      const specsForEngine = measurementSpecs.map((s, idx) => ({
+        index: idx,
+        db_id: s.id,
+        code: s.code,
+        name: s.measurement,
+        expected_value: parseFloat(String(s.expected_value)) || 0
+      }))
 
       const result = await window.measurement.start({
         annotation_name: selectedSize,
         article_style: articleStyle,
         side: side,
+        garment_color: garmentColor,
+        color_code: matchedColorCode,
         keypoints_pixels: keypointsPixels.length > 0 ? JSON.stringify(keypointsPixels) : undefined,
         target_distances: Object.keys(targetDistances).length > 0 ? JSON.stringify(targetDistances) : undefined,
         placement_box: placementBox ? JSON.stringify(placementBox) : undefined,
         image_width: imageWidth,
         image_height: imageHeight,
         image_data: imageData || undefined,
-        image_mime_type: imageMimeType
+        image_mime_type: imageMimeType,
+        measurement_specs: JSON.stringify(specsForEngine)
       })
 
       if (result.status === 'success') {
@@ -973,10 +1147,12 @@ export function ArticlesList() {
       } else {
         console.error('[MEASUREMENT] Failed to start:', result.message)
         setError(result.message || 'Failed to start camera. Check if annotation exists for this article/size.')
+        setIsShiftLocked(false) // Reset shift on failure
       }
     } catch (err) {
       console.error('[MEASUREMENT] Start measurement error:', err)
       setError('Measurement service not responding. Is Python API running?')
+      setIsShiftLocked(false) // Reset shift on error
     }
   }
 
@@ -1097,7 +1273,7 @@ export function ArticlesList() {
           actual_cm: number
         }>
 
-        // Update measured values with final readings
+        // Update measured values with final readings — ONLY for selected (checked) POMs
         // liveMeasurement.id is 1-based index (1,2,3...), map to measurementSpecs array
         setMeasuredValues(prev => {
           const newValues = { ...prev }
@@ -1106,6 +1282,7 @@ export function ArticlesList() {
             const specIndex = liveMeasurement.id - 1
             if (specIndex >= 0 && specIndex < measurementSpecs.length) {
               const spec = measurementSpecs[specIndex]
+              if (!selectedMeasurementIds.has(spec.id)) return // STRICT: skip unchecked
               newValues[spec.id] = liveMeasurement.actual_cm.toFixed(2)
               console.log(`[COMPLETE] Spec[${specIndex}] "${spec.code}" (DB id=${spec.id}): ${liveMeasurement.actual_cm.toFixed(2)} cm`)
             } else {
@@ -1123,6 +1300,7 @@ export function ArticlesList() {
       // Mark measurement as complete (allows editing and shows status)
       setMeasurementComplete(true)
       setIsMeasurementEnabled(false)
+      setIsShiftLocked(false)
 
       // Final save with all current values
       await saveMeasurements()
@@ -1189,15 +1367,36 @@ export function ArticlesList() {
         const liveData = finalResult.data.measurements as Array<{
           id: number
           actual_cm: number
+          spec_id?: number
+          spec_code?: string
         }>
 
-        // Update measured values with final readings
+        // Update measured values with final readings — ONLY for selected (checked) POMs
         liveData.forEach((liveMeasurement) => {
-          const specIndex = liveMeasurement.id - 1
-          if (specIndex >= 0 && specIndex < measurementSpecs.length) {
-            const spec = measurementSpecs[specIndex]
+          let spec: typeof measurementSpecs[0] | undefined
+
+          // PRIMARY: match by spec_id
+          if (liveMeasurement.spec_id) {
+            spec = measurementSpecs.find(s => s.id === liveMeasurement.spec_id)
+          }
+          // SECONDARY: match by spec_code
+          if (!spec && liveMeasurement.spec_code) {
+            spec = measurementSpecs.find(s => s.code === liveMeasurement.spec_code)
+          }
+          // FALLBACK: match by position
+          if (!spec) {
+            const specIndex = liveMeasurement.id - 1
+            if (specIndex >= 0 && specIndex < measurementSpecs.length) {
+              spec = measurementSpecs[specIndex]
+            }
+          }
+
+          // STRICT: only update checked measurements; unchecked rows keep their original value
+          if (spec && selectedMeasurementIds.has(spec.id)) {
             finalMeasuredValues[spec.id] = liveMeasurement.actual_cm.toFixed(2)
-            console.log(`[STOP] Spec[${specIndex}] "${spec.code}": ${liveMeasurement.actual_cm.toFixed(2)} cm`)
+            console.log(`[STOP] ✓ ${spec.code} "${spec.measurement}": ${liveMeasurement.actual_cm.toFixed(2)} cm (selected)`)
+          } else if (spec) {
+            console.log(`[STOP] ✗ ${spec.code} skipped (unchecked) — keeping original value: ${finalMeasuredValues[spec.id] || spec.expected_value}`)
           }
         })
         
@@ -1208,6 +1407,7 @@ export function ArticlesList() {
       await window.measurement.stop()
       setIsPollingActive(false)
       setIsMeasurementEnabled(false)
+      setIsShiftLocked(false)
 
       // Track which side was completed and store measurements separately
       const completedSide = currentMeasurementSide
@@ -1216,60 +1416,20 @@ export function ArticlesList() {
       if (completedSide === 'front') {
         console.log('[STOP] Front side measurement complete')
         setFrontMeasuredValues({ ...finalMeasuredValues })
+        setFrontSelectedIds(new Set(selectedMeasurementIds))
         setFrontSideComplete(true)
       } else if (completedSide === 'back') {
         console.log('[STOP] Back side measurement complete')
         setBackMeasuredValues({ ...finalMeasuredValues })
+        setBackSelectedIds(new Set(selectedMeasurementIds))
         setBackSideComplete(true)
       }
 
       // Save measurements to database with side information
-      await saveMeasurementsWithSide(completedSide || 'front', finalMeasuredValues)
+      await saveMeasurementsWithSide(completedSide || 'front', finalMeasuredValues, selectedMeasurementIds)
 
-      // Calculate QC result immediately and show popup
-      const failed: { code: string, measurement: string, expected: number, actual: number }[] = []
-
-      measurementSpecs.forEach(spec => {
-        const valueStr = finalMeasuredValues[spec.id]
-        if (!valueStr) return
-
-        const value = parseFloat(valueStr)
-        const expected = parseFloat(String(spec.expected_value)) || 0
-        const tolPlus = parseFloat(String(spec.tol_plus)) || 0
-        const tolMinus = parseFloat(String(spec.tol_minus)) || 0
-
-        const minValid = expected - tolMinus
-        const maxValid = expected + tolPlus
-
-        console.log(`[QC] ${spec.code}: actual=${value}, expected=${expected}, range=[${minValid}, ${maxValid}]`)
-
-        if (value < minValid || value > maxValid) {
-          failed.push({
-            code: spec.code,
-            measurement: spec.measurement,
-            expected: expected,
-            actual: value
-          })
-        }
-      })
-
-      setFailedMeasurements(failed)
-      setQcPassed(failed.length === 0)
-      setLastQCSide(completedSide)
-      setShowQCResult(true)
       setMeasurementComplete(true)
-      
-      // Track QC check for each side
-      if (completedSide === 'front') {
-        setFrontQCChecked(true)
-      } else if (completedSide === 'back') {
-        setBackQCChecked(true)
-      }
-      
-      console.log(`[STOP] QC Result for ${completedSide} side: ${failed.length === 0 ? 'PASSED ✓' : 'FAILED ✗'}`)
-      if (failed.length > 0) {
-        console.log('[STOP] Failed measurements:', failed.map(f => f.code).join(', '))
-      }
+      console.log(`[STOP] ${completedSide} side measurement stopped. Press Start QC to check results.`)
 
       setError(null)
     } catch (err) {
@@ -1285,66 +1445,145 @@ export function ArticlesList() {
     setMeasurementComplete(false) // Allow further measurements
   }
 
-  // Handle Next Article - save all measurements and reset panel for next article
+  // Handle Next Article - robust atomic save + verification before navigating
   const handleNextArticle = async () => {
     console.log('[NEXT] Moving to next article - saving measurements...')
-    
+    setIsSavingNextArticle(true)
+    setError(null)
+
+    const MAX_RETRIES = 2
+    let saveSucceeded = false
+
     try {
-      // Final save of all measurements to database
       const articleStyle = jobCardSummary?.article_style ||
         articles.find(a => a.id === selectedArticleId)?.article_style
-      
-      // Save a measurement session record for analytics
-      if (selectedPOArticleId && selectedSize && operator?.id) {
-        const frontQCPassed = frontSideComplete && frontQCChecked ? (qcPassed ? 'PASS' : 'FAIL') : null
-        const backQCPassed = backSideComplete && backQCChecked ? (qcPassed ? 'PASS' : 'FAIL') : null
-        
-        await window.database.execute(`
-          INSERT INTO measurement_sessions 
-            (purchase_order_article_id, size, article_style, operator_id, 
-             front_side_complete, back_side_complete, 
-             front_qc_result, back_qc_result,
-             completed_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
-          ON DUPLICATE KEY UPDATE
-            front_side_complete = VALUES(front_side_complete),
-            back_side_complete = VALUES(back_side_complete),
-            front_qc_result = VALUES(front_qc_result),
-            back_qc_result = VALUES(back_qc_result),
-            completed_at = NOW()
-        `, [
-          selectedPOArticleId,
-          selectedSize,
-          articleStyle,
-          operator.id,
-          frontSideComplete ? 1 : 0,
-          backSideComplete ? 1 : 0,
-          frontQCPassed,
-          backQCPassed
-        ])
-        console.log('[NEXT] Saved measurement session for analytics')
+
+      // ── Step 1: Save per-side detailed measurements (only checked POMs) ──
+      for (let attempt = 0; attempt <= MAX_RETRIES && !saveSucceeded; attempt++) {
+        try {
+          if (attempt > 0) console.log(`[NEXT] Retry attempt ${attempt}/${MAX_RETRIES}...`)
+
+          // Save front side measurements if complete (uses per-side checked ID snapshot)
+          if (frontSideComplete && Object.keys(frontMeasuredValues).length > 0) {
+            const frontOk = await saveMeasurementsWithSide('front', frontMeasuredValues, frontSelectedIds)
+            if (!frontOk) throw new Error('Front side save failed')
+            console.log('[NEXT] Front side measurements persisted')
+          }
+
+          // Save back side measurements if complete (uses per-side checked ID snapshot)
+          if (backSideComplete && Object.keys(backMeasuredValues).length > 0) {
+            const backOk = await saveMeasurementsWithSide('back', backMeasuredValues, backSelectedIds)
+            if (!backOk) throw new Error('Back side save failed')
+            console.log('[NEXT] Back side measurements persisted')
+          }
+
+          // ── Step 2: Save measurement session record for analytics ──
+          if (selectedPOArticleId && selectedSize && operator?.id) {
+            const frontQCResult = frontSideComplete && frontQCChecked
+              ? (failedMeasurements.length === 0 && qcPassed ? 'PASS' : 'FAIL') : null
+            const backQCResult = backSideComplete && backQCChecked
+              ? (failedMeasurements.length === 0 && qcPassed ? 'PASS' : 'FAIL') : null
+
+            await window.database.execute(`
+              INSERT INTO measurement_sessions 
+                (purchase_order_article_id, size, article_style, operator_id, 
+                 front_side_complete, back_side_complete, 
+                 front_qc_result, back_qc_result,
+                 completed_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+              ON DUPLICATE KEY UPDATE
+                front_side_complete = VALUES(front_side_complete),
+                back_side_complete = VALUES(back_side_complete),
+                front_qc_result = VALUES(front_qc_result),
+                back_qc_result = VALUES(back_qc_result),
+                completed_at = NOW()
+            `, [
+              selectedPOArticleId,
+              selectedSize,
+              articleStyle,
+              operator.id,
+              frontSideComplete ? 1 : 0,
+              backSideComplete ? 1 : 0,
+              frontQCResult,
+              backQCResult
+            ])
+            console.log('[NEXT] Session record saved')
+          }
+
+          // ── Step 3: Verification — read back from BOTH tables to confirm persistence ──
+          if (selectedPOArticleId && selectedSize) {
+            // Verify measurement_results (backward-compatible table)
+            const verifyBasic = await window.database.execute(`
+              SELECT COUNT(*) as cnt FROM measurement_results 
+              WHERE purchase_order_article_id = ? AND size = ?
+            `, [selectedPOArticleId, selectedSize]) as any
+            const basicRows = verifyBasic?.[0]?.[0]?.cnt ?? verifyBasic?.[0]?.cnt ?? 0
+
+            // Verify measurement_results_detailed (primary table)
+            let detailedRows = 0
+            try {
+              const verifyDetailed = await window.database.execute(`
+                SELECT COUNT(*) as cnt FROM measurement_results_detailed 
+                WHERE purchase_order_article_id = ? AND size = ?
+              `, [selectedPOArticleId, selectedSize]) as any
+              detailedRows = verifyDetailed?.[0]?.[0]?.cnt ?? verifyDetailed?.[0]?.cnt ?? 0
+            } catch {
+              // Table may not exist yet — basic table is sufficient
+              detailedRows = -1
+            }
+
+            // Verify measurement_sessions
+            const verifySession = await window.database.execute(`
+              SELECT COUNT(*) as cnt FROM measurement_sessions 
+              WHERE purchase_order_article_id = ? AND size = ?
+            `, [selectedPOArticleId, selectedSize]) as any
+            const sessionRows = verifySession?.[0]?.[0]?.cnt ?? verifySession?.[0]?.cnt ?? 0
+
+            console.log(`[NEXT] Verification: measurement_results=${basicRows}, measurement_results_detailed=${detailedRows}, measurement_sessions=${sessionRows}`)
+
+            const hasCompletedSide = frontSideComplete || backSideComplete
+            if (hasCompletedSide && basicRows === 0) {
+              throw new Error(`Verification failed — 0 rows in measurement_results after save`)
+            }
+            if (hasCompletedSide && sessionRows === 0 && operator?.id) {
+              throw new Error(`Verification failed — 0 rows in measurement_sessions after save`)
+            }
+          }
+
+          saveSucceeded = true
+          console.log('[NEXT] All data saved and verified successfully')
+        } catch (retryErr) {
+          console.error(`[NEXT] Save attempt ${attempt + 1} failed:`, retryErr)
+          if (attempt === MAX_RETRIES) {
+            throw retryErr // Final attempt failed → propagate
+          }
+          // Brief pause before retry
+          await new Promise(r => setTimeout(r, 500))
+        }
       }
 
+      // ── Step 4: Navigation allowed — reset panel ──
       console.log('[NEXT] Resetting panel for next article...')
-      
-      // Close QC popup if open
+
       setShowQCResult(false)
 
-      // Reset all selections
       setSelectedBrandId(null)
       setSelectedArticleTypeId(null)
       setSelectedArticleId(null)
       setSelectedPOId(null)
       setSelectedPOArticleId(null)
       setSelectedSize(null)
+      setSelectedColor(null)
 
-      // Reset measurement states
       setMeasurementSpecs([])
       setMeasuredValues({})
+      setEditableTols({})
       setFrontMeasuredValues({})
       setBackMeasuredValues({})
       setFrontSideComplete(false)
       setBackSideComplete(false)
+      setFrontSelectedIds(new Set())
+      setBackSelectedIds(new Set())
       setFrontQCChecked(false)
       setBackQCChecked(false)
       setLastQCSide(null)
@@ -1352,16 +1591,18 @@ export function ArticlesList() {
       setMeasurementComplete(false)
       setIsMeasurementEnabled(false)
       setIsPollingActive(false)
+      setIsShiftLocked(false)
+      setSelectedMeasurementIds(new Set())
+      selectedMeasurementIdsRef.current = new Set()
+      setDisplayUnit('cm')
 
-      // Reset related lists
       setArticleTypes([])
       setArticles([])
       setPurchaseOrders([])
       setPOArticles([])
       setAvailableSizes([])
       setJobCardSummary(null)
-      
-      // Reset QC popup states
+
       setQcPassed(true)
       setFailedMeasurements([])
 
@@ -1369,7 +1610,9 @@ export function ArticlesList() {
       console.log('[NEXT] Panel reset complete - ready for next article')
     } catch (err) {
       console.error('[NEXT] Error during next article transition:', err)
-      setError('Failed to save measurements. Please try again.')
+      setError('Save failed — measurements not confirmed in database. Please try again before proceeding.')
+    } finally {
+      setIsSavingNextArticle(false)
     }
   }
 
@@ -1394,10 +1637,12 @@ export function ArticlesList() {
       const valueStr = valuesToCheck[spec.id]
       if (!valueStr) return
 
-      const value = parseFloat(valueStr)
+      const value = parseFloat(valueStr) // Always in cm
       const expected = parseFloat(String(spec.expected_value)) || 0
-      const tolPlus = parseFloat(String(spec.tol_plus)) || 0
-      const tolMinus = parseFloat(String(spec.tol_minus)) || 0
+      // Use editable tolerances if available, otherwise spec defaults
+      const tols = editableTols[spec.id]
+      const tolPlus = tols ? (parseFloat(tols.tol_plus) || parseFloat(String(spec.tol_plus)) || 0) : (parseFloat(String(spec.tol_plus)) || 0)
+      const tolMinus = tols ? (parseFloat(tols.tol_minus) || parseFloat(String(spec.tol_minus)) || 0) : (parseFloat(String(spec.tol_minus)) || 0)
 
       const minValid = expected - tolMinus
       const maxValid = expected + tolPlus
@@ -1531,7 +1776,13 @@ export function ArticlesList() {
   }
 
   // Save measurements with side information for analytics
-  const saveMeasurementsWithSide = async (side: 'front' | 'back', measurements: Record<number, string>): Promise<boolean> => {
+  // Only saves checked/selected POM rows; uses operator-edited tolerances.
+  // All values are stored in cm (internal source of truth).
+  const saveMeasurementsWithSide = async (
+    side: 'front' | 'back',
+    measurements: Record<number, string>,
+    checkedIds: Set<number>
+  ): Promise<boolean> => {
     if (!selectedPOArticleId || !selectedSize) {
       console.log('[SAVE] Missing PO article ID or size')
       return false
@@ -1541,7 +1792,8 @@ export function ArticlesList() {
       articles.find(a => a.id === selectedArticleId)?.article_style
 
     setIsSaving(true)
-    console.log(`[SAVE] Saving ${side} side measurements for PO Article:`, selectedPOArticleId, 'Size:', selectedSize)
+    console.log(`[SAVE] Saving ${side} side measurements for PO Article:`, selectedPOArticleId, 'Size:', selectedSize, 'Color:', selectedColor || 'other')
+    console.log(`[SAVE] Checked POM IDs: [${[...checkedIds].join(', ')}]`)
 
     try {
       // Delete previous measurements for this article/size/side (remeasure logic)
@@ -1553,53 +1805,59 @@ export function ArticlesList() {
 
       let savedCount = 0
       for (const spec of measurementSpecs) {
+        // STRICT: only persist rows the operator explicitly checked
+        if (!checkedIds.has(spec.id)) {
+          console.log(`[SAVE] Skipping unchecked POM ${spec.code} (id=${spec.id})`)
+          continue
+        }
+
         const valueStr = measurements[spec.id]
         const value = valueStr ? parseFloat(valueStr) : null
-        
-        if (value === null) continue // Skip empty values
-        
-        // Calculate status
+        if (value === null || isNaN(value)) continue // Skip empty / invalid
+
+        // Use operator-edited tolerances if available, otherwise spec defaults
+        const tols = editableTols[spec.id]
+        const tolPlus = tols ? (parseFloat(tols.tol_plus) || parseFloat(String(spec.tol_plus)) || 0) : (parseFloat(String(spec.tol_plus)) || 0)
+        const tolMinus = tols ? (parseFloat(tols.tol_minus) || parseFloat(String(spec.tol_minus)) || 0) : (parseFloat(String(spec.tol_minus)) || 0)
         const expected = parseFloat(String(spec.expected_value)) || 0
-        const tolPlus = parseFloat(String(spec.tol_plus)) || 0
-        const tolMinus = parseFloat(String(spec.tol_minus)) || 0
         const minValid = expected - tolMinus
         const maxValid = expected + tolPlus
         const status = (value >= minValid && value <= maxValid) ? 'PASS' : 'FAIL'
 
-        // Save to detailed results table with side info
-        const sql = `
+        // Save to detailed results table with side info + garment_color
+        await window.database.execute(`
           INSERT INTO measurement_results_detailed 
             (purchase_order_article_id, measurement_id, size, side, article_style,
              measured_value, expected_value, tol_plus, tol_minus, status, operator_id)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `
-        await window.database.execute(sql, [
+        `, [
           selectedPOArticleId,
           spec.id,
           selectedSize,
           side,
           articleStyle,
-          value,
-          expected,
-          tolPlus,
-          tolMinus,
+          value,      // Always cm
+          expected,   // Always cm
+          tolPlus,    // Always cm
+          tolMinus,   // Always cm
           status,
           operator?.id || null
         ])
         savedCount++
-        console.log(`[SAVE] Saved ${side} ${spec.code}: value=${value}, status=${status}`)
       }
 
-      // Also update the simple measurement_results table for backward compatibility
+      // Also update backward-compatible measurement_results table (checked rows only)
       for (const spec of measurementSpecs) {
+        if (!checkedIds.has(spec.id)) continue
+
         const valueStr = measurements[spec.id]
         const value = valueStr ? parseFloat(valueStr) : null
-        
-        if (value === null) continue
-        
+        if (value === null || isNaN(value)) continue
+
+        const tols = editableTols[spec.id]
+        const tolPlus = tols ? (parseFloat(tols.tol_plus) || parseFloat(String(spec.tol_plus)) || 0) : (parseFloat(String(spec.tol_plus)) || 0)
+        const tolMinus = tols ? (parseFloat(tols.tol_minus) || parseFloat(String(spec.tol_minus)) || 0) : (parseFloat(String(spec.tol_minus)) || 0)
         const expected = parseFloat(String(spec.expected_value)) || 0
-        const tolPlus = parseFloat(String(spec.tol_plus)) || 0
-        const tolMinus = parseFloat(String(spec.tol_minus)) || 0
         const minValid = expected - tolMinus
         const maxValid = expected + tolPlus
         const status = (value >= minValid && value <= maxValid) ? 'PASS' : 'FAIL'
@@ -1623,12 +1881,11 @@ export function ArticlesList() {
         ])
       }
 
-      console.log(`[SAVE] Successfully saved ${savedCount} ${side} side measurements`)
+      console.log(`[SAVE] Successfully saved ${savedCount} checked ${side} side measurements (of ${measurementSpecs.length} total specs)`)
       return true
     } catch (err) {
       console.error(`[SAVE] Failed to save ${side} side measurements:`, err)
-      // If the detailed table doesn't exist, that's okay - the basic save will work
-      return true
+      return false
     } finally {
       setIsSaving(false)
     }
@@ -1662,6 +1919,7 @@ export function ArticlesList() {
     setIsPollingActive(false)
     setMeasurementComplete(false)
     setIsMeasurementEnabled(false)
+    setIsShiftLocked(false)
     setEditableTols({})
 
     if (currentPOArticleIndex < poArticles.length - 1) {
@@ -2051,21 +2309,31 @@ export function ArticlesList() {
 
   return (
     <div className="h-full w-full flex flex-col overflow-hidden bg-surface">
-      {/* Error Message - Touch Friendly */}
+      {/* Error Notification - Professional Industrial Toast */}
       {error && (
-        <div className="mx-4 mt-3 bg-error-light border-2 border-error/20 text-error px-5 py-4 rounded-xl flex items-center gap-4">
-          <svg className="w-7 h-7 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-          </svg>
-          <span className="text-touch-base font-semibold flex-1">{error}</span>
-          <button
-            onClick={() => setError(null)}
-            className="min-w-[48px] min-h-[48px] flex items-center justify-center rounded-xl hover:bg-error/10 transition-colors"
-          >
-            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-            </svg>
-          </button>
+        <div className="fixed top-4 right-4 z-[200] max-w-md animate-[slideIn_0.3s_ease-out] shadow-2xl">
+          <div className="bg-white border border-error/20 rounded-2xl overflow-hidden shadow-xl">
+            <div className="bg-error h-1.5 w-full"></div>
+            <div className="px-5 py-4 flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-error/10 flex items-center justify-center shrink-0 mt-0.5">
+                <svg className="w-5 h-5 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-bold text-error uppercase tracking-wider mb-1">System Alert</p>
+                <p className="text-[14px] text-slate-700 font-medium leading-snug">{error}</p>
+              </div>
+              <button
+                onClick={() => setError(null)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-error hover:bg-error/5 transition-all shrink-0"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -2076,12 +2344,12 @@ export function ArticlesList() {
         <div className="w-[50%] flex flex-col gap-4 overflow-hidden">
 
           {/* Brand Selection - Main Section */}
-          <div className="card p-4 shrink-0">
-            <h3 className="text-touch-lg font-bold text-primary mb-3 flex items-center gap-2">
-              <svg className="w-6 h-6 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="card p-6 shrink-0">
+            <h3 className="text-touch-2xl font-bold text-primary mb-5 flex items-center gap-3">
+              <svg className="w-8 h-8 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
-              Select Brand
+              Brand / Client
             </h3>
             <div className="flex gap-4 overflow-x-auto scrollbar-hide py-2 px-2 -mx-2">
               {brands.map((brand) => {
@@ -2121,16 +2389,21 @@ export function ArticlesList() {
                       }`}
                     title={brand.name}
                   >
-                    {logoPath ? (
+                    {logoPath && !failedLogos.has(brand.id) ? (
                       <img
                         src={logoPath}
                         alt={brand.name}
                         className="w-full h-full object-contain"
+                        onError={() => setFailedLogos(prev => new Set([...prev, brand.id]))}
                       />
                     ) : (
-                      <span className="text-3xl font-black text-primary">
-                        {brand.name.substring(0, 2).toUpperCase()}
-                      </span>
+                      <div className="w-full h-full flex items-center justify-center bg-white rounded-lg px-2 py-1">
+                        <span className={`font-extrabold text-primary text-center leading-tight break-words uppercase tracking-wide ${
+                          brand.name.length <= 4 ? 'text-2xl' : brand.name.length <= 8 ? 'text-lg' : brand.name.length <= 14 ? 'text-base' : 'text-sm'
+                        }`}>
+                          {brand.name}
+                        </span>
+                      </div>
                     )}
                   </button>
                 )
@@ -2204,7 +2477,7 @@ export function ArticlesList() {
               <svg className="w-8 h-8 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
               </svg>
-              Size Selection
+              Article Size
             </h3>
             {availableSizes.length === 0 ? (
               <div className="text-center py-6 text-slate-400 text-touch-lg italic">
@@ -2231,37 +2504,151 @@ export function ArticlesList() {
 
         {/* RIGHT SIDE - Live Measurement Table - NO HORIZONTAL SCROLL */}
         <div className="w-[50%] card overflow-hidden flex flex-col">
-          <div className="px-4 py-3 border-b border-slate-200 bg-white shrink-0">
-            <h3 className="text-touch-xl font-bold text-primary flex items-center gap-3">
-              <span className={`w-4 h-4 rounded-full ${isPollingActive ? 'bg-success animate-pulse' : 'bg-slate-300'}`}></span>
-              Live Measurement
-              <span className="ml-auto text-touch-base font-bold text-white bg-accent px-4 py-2 rounded-lg">
+          <div className="px-4 py-1 border-b border-slate-200 bg-white shrink-0">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-[16px] font-bold text-primary flex items-center gap-2">
+                <span className={`w-3 h-3 rounded-full ${isPollingActive ? 'bg-success animate-pulse' : 'bg-slate-300'}`}></span>
+                Live Measurement
+              </h3>
+
+              {/* Garment Color Section */}
+              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Garment Color</span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setSelectedColor(prev => prev === 'white' ? null : 'white')}
+                    className={`px-3 py-1.5 text-[12px] font-bold rounded-md border active:scale-95 transition-all whitespace-nowrap ${
+                      selectedColor === 'white'
+                        ? 'bg-white text-primary border-primary shadow-md ring-2 ring-primary/30'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-primary/40 hover:text-primary'
+                    }`}
+                  >
+                    White
+                  </button>
+                  <button
+                    onClick={() => setSelectedColor(prev => prev === 'black' ? null : 'black')}
+                    className={`px-3 py-1.5 text-[12px] font-bold rounded-md border active:scale-95 transition-all whitespace-nowrap ${
+                      selectedColor === 'black'
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-md'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 hover:text-slate-800'
+                    }`}
+                  >
+                    Black
+                  </button>
+                  <button
+                    onClick={() => setSelectedColor(prev => prev === 'other' ? null : 'other')}
+                    className={`px-3 py-1.5 text-[12px] font-bold rounded-md border active:scale-95 transition-all whitespace-nowrap ${
+                      selectedColor === 'other'
+                        ? 'bg-gradient-to-r from-rose-400 via-amber-400 to-teal-400 text-white border-transparent shadow-md'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-primary/40 hover:text-primary'
+                    }`}
+                  >
+                    Other
+                  </button>
+                </div>
+              </div>
+
+              <span className="text-[15px] font-bold text-white bg-accent px-3 py-1.5 rounded-lg">
                 {selectedSize || 'No Size'}
               </span>
-            </h3>
+            </div>
           </div>
           <div className="overflow-y-auto overflow-x-hidden flex-1">
             <table className="w-full text-touch-base">
               <thead className="bg-surface-teal sticky top-0 z-10 border-b-2 border-primary/10">
                 <tr>
-                  <th className="px-3 py-4 text-left text-touch-sm font-bold text-primary uppercase tracking-wide w-14">Code</th>
+                  <th className="px-1 py-4 text-center w-10">
+                    <button
+                      onClick={() => {
+                        if (selectedMeasurementIds.size === measurementSpecs.length && measurementSpecs.length > 0) {
+                          const newVals = { ...measuredValues }
+                          measurementSpecs.forEach(s => { newVals[s.id] = String(s.expected_value) })
+                          setMeasuredValues(newVals)
+                          setSelectedMeasurementIds(new Set())
+                        } else {
+                          const newVals = { ...measuredValues }
+                          measurementSpecs.forEach(s => { newVals[s.id] = '' })
+                          setMeasuredValues(newVals)
+                          setSelectedMeasurementIds(new Set(measurementSpecs.map(s => s.id)))
+                        }
+                      }}
+                      className="w-7 h-7 rounded-md border-2 border-primary/30 flex items-center justify-center hover:bg-primary/10 transition-all mx-auto"
+                      title="Select/Deselect All"
+                    >
+                      {selectedMeasurementIds.size === measurementSpecs.length && measurementSpecs.length > 0 ? (
+                        <svg className="w-4 h-4 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : null}
+                    </button>
+                  </th>
+                  <th className="px-3 py-4 text-left text-touch-sm font-bold text-primary uppercase tracking-wide w-14">POM</th>
                   <th className="px-3 py-4 text-left text-touch-sm font-bold text-primary uppercase tracking-wide">Measurement</th>
-                  <th className="px-3 py-4 text-center text-touch-sm font-bold text-primary uppercase tracking-wide w-16">Spec</th>
+                  <th className="px-3 py-3 text-center text-touch-sm font-bold text-primary uppercase tracking-wide w-19">
+                    <div className="flex flex-col items-center leading-tight">
+                      <span>Value</span>
+                      <div className="flex items-center gap-0.5 mt-0.5">
+                        <button
+                          onClick={() => setDisplayUnit('cm')}
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all ${
+                            displayUnit === 'cm'
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                          }`}
+                        >CM</button>
+                        <button
+                          onClick={() => setDisplayUnit('inch')}
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all ${
+                            displayUnit === 'inch'
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                          }`}
+                        >INCH</button>
+                      </div>
+                    </div>
+                  </th>
                   <th className="px-3 py-4 text-center text-touch-sm font-bold text-primary uppercase tracking-wide w-28">Tol ±</th>
                   <th className="px-3 py-4 text-center text-touch-sm font-bold text-primary uppercase tracking-wide w-18">Result</th>
-                  <th className="px-3 py-4 text-center text-touch-sm font-bold text-primary uppercase tracking-wide w-14">Pass</th>
+                  <th className="px-3 py-4 text-center text-touch-sm font-bold text-primary uppercase tracking-wide w-14">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {/* Render measurement specs if available, otherwise show empty state */}
+                {/* Render measurement specs - auto-shift only when measurement mode active (Front/Back pressed) */}
                 {measurementSpecs.length > 0 ? (
-                  measurementSpecs.map((spec) => {
+                  (isShiftLocked
+                    ? [...measurementSpecs].sort((a, b) => {
+                        const aSelected = selectedMeasurementIds.has(a.id) ? 0 : 1
+                        const bSelected = selectedMeasurementIds.has(b.id) ? 0 : 1
+                        return aSelected - bSelected
+                      })
+                    : measurementSpecs
+                  ).map((spec) => {
                     const status = calculateStatus(spec)
                     return (
-                      <tr key={spec.id} className="hover:bg-slate-50/80 transition-colors">
+                      <tr key={spec.id} className={`transition-colors ${
+                        isShiftLocked
+                          ? (selectedMeasurementIds.has(spec.id) ? 'hover:bg-slate-50/80' : 'bg-slate-50/30 opacity-50 border-l-2 border-l-slate-200')
+                          : (selectedMeasurementIds.has(spec.id) ? 'bg-success/5' : 'hover:bg-slate-50/80')
+                      }`}>
+                        <td className="px-1 py-3 text-center">
+                          <button
+                            onClick={() => toggleMeasurementSelection(spec.id)}
+                            className={`w-7 h-7 rounded-md border-2 flex items-center justify-center transition-all active:scale-90 mx-auto ${
+                              selectedMeasurementIds.has(spec.id)
+                                ? 'border-success bg-success/10'
+                                : 'border-slate-300 bg-white hover:border-slate-400'
+                            }`}
+                          >
+                            {selectedMeasurementIds.has(spec.id) && (
+                              <svg className="w-4 h-4 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </button>
+                        </td>
                         <td className="px-2 py-3 font-mono text-touch-sm font-bold text-primary">{spec.code}</td>
                         <td className="px-2 py-3 text-touch-sm text-slate-600 truncate max-w-[120px]" title={spec.measurement}>{spec.measurement}</td>
-                        <td className="px-2 py-3 text-center font-bold text-slate-800 text-touch-base">{spec.expected_value}</td>
+                        <td className="px-2 py-3 text-center font-bold text-slate-800 text-touch-base">{toDisplayUnit(parseFloat(String(spec.expected_value)) || 0)}</td>
 
                         {/* Tol± Column - SINGLE INPUT with touch arrows, applies to BOTH +/- */}
                         <td className="px-2 py-3 text-center">
@@ -2312,18 +2699,18 @@ export function ArticlesList() {
                             </div>
                           ) : (
                             <span className="inline-block px-3 py-1.5 bg-surface-teal rounded-lg text-touch-base font-bold text-primary">
-                              ±{spec.tol_plus}
+                              ±{tolDisplay(parseFloat(String(spec.tol_plus)) || 0)}
                             </span>
                           )}
                         </td>
 
-                        {/* Result - READ ONLY */}
+                        {/* Result - READ ONLY, display-converted from internal cm value */}
                         <td className="px-2 py-3 text-center">
                           <div className={`px-2 py-1.5 rounded text-touch-base font-bold ${measuredValues[spec.id]
                             ? status === 'PASS' ? 'bg-success/10 text-success' : status === 'FAIL' ? 'bg-error/10 text-error' : 'bg-slate-100 text-primary'
                             : 'bg-slate-50 text-slate-300'
                             }`}>
-                            {measuredValues[spec.id] || '--'}
+                            {measuredValues[spec.id] ? toDisplayUnit(parseFloat(measuredValues[spec.id])) : '--'}
                           </div>
                         </td>
 
@@ -2360,6 +2747,7 @@ export function ArticlesList() {
                 ) : (
                   [...Array(12)].map((_, index) => (
                     <tr key={`empty-${index}`} className="opacity-30">
+                      <td className="px-1 py-3"><div className="h-7 w-7 bg-slate-100 rounded-md mx-auto"></div></td>
                       <td className="px-2 py-3"><div className="h-5 bg-slate-100 rounded w-10"></div></td>
                       <td className="px-2 py-3"><div className="h-5 bg-slate-100 rounded w-20"></div></td>
                       <td className="px-2 py-3 text-center"><div className="h-5 bg-slate-100 rounded w-10 mx-auto"></div></td>
@@ -2385,6 +2773,7 @@ export function ArticlesList() {
                     setFrontSideComplete(false)
                     setFrontQCChecked(false)
                     setFrontMeasuredValues({})
+                    setFrontSelectedIds(new Set())
                     setMeasuredValues({})
                   }
                   handleFrontSideMeasurement()
@@ -2417,6 +2806,7 @@ export function ArticlesList() {
                     setBackSideComplete(false)
                     setBackQCChecked(false)
                     setBackMeasuredValues({})
+                    setBackSelectedIds(new Set())
                     setMeasuredValues({})
                   }
                   handleBackSideMeasurement()
@@ -2458,9 +2848,9 @@ export function ArticlesList() {
               </button>
             </div>
 
-            {/* Row 2: Check QC | Next Article */}
+            {/* Row 2: Start QC | Next Article */}
             <div className="grid grid-cols-2 gap-2">
-              {/* Check QC - enabled when at least one side is complete */}
+              {/* Start QC - enabled when at least one side is complete */}
               <button
                 onClick={() => handleCheckQC()}
                 disabled={!frontSideComplete && !backSideComplete}
@@ -2472,22 +2862,34 @@ export function ArticlesList() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                Check QC
+                Start QC
               </button>
 
-              {/* Next Article - save and reset */}
+              {/* Next Article - robust save + verification before navigation */}
               <button
                 onClick={handleNextArticle}
-                disabled={!frontSideComplete && !backSideComplete}
-                className={`py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${!frontSideComplete && !backSideComplete
+                disabled={(!frontSideComplete && !backSideComplete) || isSavingNextArticle}
+                className={`py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${(!frontSideComplete && !backSideComplete) || isSavingNextArticle
                   ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                   : 'bg-primary text-white hover:bg-primary-dark shadow-md'
                   }`}
               >
-                Next Article
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
+                {isSavingNextArticle ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    Next Article
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                    </svg>
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -2543,35 +2945,12 @@ export function ArticlesList() {
                   </p>
                 </div>
               ) : (
-                <div>
-                  <p className="text-touch-base text-slate-600 mb-4">
-                    The following measurements are out of tolerance:
-                  </p>
-                  <div className="space-y-3 max-h-[300px] overflow-y-auto">
-                    {failedMeasurements.map((item, index) => (
-                      <div key={index} className="bg-error/5 border border-error/20 rounded-xl p-4">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-mono text-touch-sm font-bold text-error">{item.code}</span>
-                          <span className="text-touch-sm text-slate-600">-</span>
-                          <span className="text-touch-sm font-medium text-slate-700">{item.measurement}</span>
-                        </div>
-                        <div className="flex items-center gap-4 text-touch-xs">
-                          <span className="text-slate-500">
-                            Expected: <strong className="text-primary">{item.expected.toFixed(2)} cm</strong>
-                          </span>
-                          <span className="text-slate-500">
-                            Actual: <strong className="text-error">{item.actual.toFixed(2)} cm</strong>
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                /* QC FAILED — clean spacer only, no diagnostic text */
+                <div className="py-2" />
               )}
             </div>
 
-            {/* Footer */}
-{/* Footer - with Remeasure option for failed QC */}
+            {/* Footer - with Remeasure option for failed QC */}
             <div className="px-6 pb-6 space-y-3">
               {!qcPassed && (
                 <button
@@ -2581,10 +2960,12 @@ export function ArticlesList() {
                       setFrontSideComplete(false)
                       setFrontQCChecked(false)
                       setFrontMeasuredValues({})
+                      setFrontSelectedIds(new Set())
                     } else if (lastQCSide === 'back') {
                       setBackSideComplete(false)
                       setBackQCChecked(false)
                       setBackMeasuredValues({})
+                      setBackSelectedIds(new Set())
                     }
                     setMeasuredValues({})
                     setShowQCResult(false)

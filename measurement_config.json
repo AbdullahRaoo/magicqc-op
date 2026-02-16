@@ -1,9 +1,54 @@
 {
-    "annotation_name": "M",
-    "article_style": "Trouser Baggy Fit",
-    "annotation_json_path": "D:\\RJM\\operatorPannel-main\\temp_annotations\\Trouser Baggy Fit_M_front.json",
-    "reference_image_path": "D:\\RJM\\operatorPannel-main\\temp_annotations\\Trouser Baggy Fit_M.jpg",
+    "annotation_name": "S",
+    "article_style": "T-Shirt",
+    "annotation_json_path": "D:\\RJM\\operatorPannel-main\\temp_annotations\\T-Shirt_S-z.json",
+    "reference_image_path": "D:\\RJM\\operatorPannel-main\\temp_annotations\\T-Shirt_S-z.jpg",
     "side": "front",
+    "garment_color": "other",
     "laravel_storage": "D:\\RJM\\magicQC\\public\\storage",
-    "results_path": "D:\\RJM\\operatorPannel-main\\storage\\measurement_results"
+    "results_path": "D:\\RJM\\operatorPannel-main\\storage\\measurement_results",
+    "measurement_specs": [
+        {
+            "index": 0,
+            "db_id": 78,
+            "code": "A",
+            "name": "Length",
+            "expected_value": 48
+        },
+        {
+            "index": 1,
+            "db_id": 80,
+            "code": "A1",
+            "name": "Chest width 2.5 cm below",
+            "expected_value": 48
+        },
+        {
+            "index": 2,
+            "db_id": 79,
+            "code": "B1",
+            "name": "CB length excel neckband",
+            "expected_value": 62
+        },
+        {
+            "index": 3,
+            "db_id": 81,
+            "code": "C",
+            "name": "Chest Width",
+            "expected_value": 45
+        },
+        {
+            "index": 4,
+            "db_id": 82,
+            "code": "D",
+            "name": "Arm length",
+            "expected_value": 34
+        },
+        {
+            "index": 5,
+            "db_id": 83,
+            "code": "F",
+            "name": "Shoulder Width",
+            "expected_value": 28
+        }
+    ]
 }

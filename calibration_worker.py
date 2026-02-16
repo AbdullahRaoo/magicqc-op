@@ -1,9 +1,14 @@
 """
 Calibration Worker Script for Operator Panel
-Handles camera calibration in a separate console window
+Handles camera calibration in a separate process (no visible console)
 """
+# ── MUST BE FIRST: redirect ALL stdout/stderr to log file ──
 import sys
 import os
+from worker_logger import setup_file_logging
+_logger = setup_file_logging('calibration')
+# ── From this point on, every print() goes to logs/calibration.log ──
+
 import json
 import cv2
 import math

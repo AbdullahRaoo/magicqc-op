@@ -14,39 +14,11 @@ import subprocess
 import signal
 import psutil
 
-# ── File-based logging for api_server itself ──
-from worker_logger import setup_file_logging
-_logger = setup_file_logging('api_server')
-# All print() output now goes to logs/api_server.log
-
 try:
     from PIL import Image
     import io
 except ImportError:
     print("[WARN] PIL not installed, run: pip install Pillow")
-
-
-# ── Helper: build Windows-safe Popen kwargs that completely hide the console ──
-def _hidden_popen_kwargs() -> dict:
-    """Return extra keyword arguments for subprocess.Popen on Windows
-    that guarantee NO console window is ever shown to the operator."""
-    import platform
-    if platform.system() != 'Windows':
-        return {}
-
-    si = subprocess.STARTUPINFO()
-    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-    si.wShowWindow = 0  # SW_HIDE
-
-    return {
-        'creationflags': (
-            subprocess.CREATE_NO_WINDOW
-        ),
-        'startupinfo': si,
-        'stdin': subprocess.DEVNULL,
-        'stdout': subprocess.DEVNULL,
-        'stderr': subprocess.DEVNULL,
-    }
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for Laravel communication
@@ -77,33 +49,6 @@ measurement_status = {
     'error': None,
     'start_time': None
 }
-
-def strip_base64_prefix(data):
-    """Strip data URL prefix (e.g., 'data:image/jpeg;base64,') from base64 string.
-    Returns clean base64 data safe for base64.b64decode()."""
-    if data and ',' in data and data.strip().startswith('data:'):
-        # e.g., 'data:image/jpeg;base64,/9j/4AAQ...' -> '/9j/4AAQ...'
-        return data.split(',', 1)[1]
-    return data
-
-def decode_base64_image(image_data_raw):
-    """Safely decode base64 image data, stripping data URL prefix if present.
-    Returns raw bytes of the image."""
-    clean_b64 = strip_base64_prefix(image_data_raw)
-    return base64.b64decode(clean_b64)
-
-def verify_image_file(file_path):
-    """Verify a written image file is a valid image readable by OpenCV.
-    Returns (success, width, height) tuple."""
-    try:
-        import cv2
-        img = cv2.imread(file_path)
-        if img is not None:
-            h, w = img.shape[:2]
-            return True, w, h
-        return False, 0, 0
-    except Exception:
-        return False, 0, 0
 
 def ensure_directories():
     """Ensure all required directories exist"""
@@ -264,14 +209,6 @@ def start_measurement():
         annotation_name = data.get('annotation_name')  # This is the size (S, M, L, etc.)
         article_style = data.get('article_style')      # This is the article style name
         side = data.get('side', 'front')
-        garment_color = data.get('garment_color', 'other')  # 'white', 'black', or 'other'
-        
-        # Color code for file naming: w=white, b=black, z=other
-        color_code = data.get('color_code', '')
-        if not color_code:
-            color_code_map = {'white': 'w', 'black': 'b', 'other': 'z'}
-            color_code = color_code_map.get(garment_color, 'z')
-        print(f"[API] Garment color: {garment_color}, color code: {color_code}")
         
         # NEW: Measurement-ready data from database (preferred)
         keypoints_pixels = data.get('keypoints_pixels')    # JSON string [[x, y], ...] (pixel coordinates)
@@ -284,16 +221,6 @@ def start_measurement():
         annotation_data = data.get('annotation_data')  # JSON string [{x, y, label}, ...]
         image_data = data.get('image_data')            # Base64 encoded reference image
         image_mime_type = data.get('image_mime_type')  # e.g., 'image/jpeg', 'image/png'
-        
-        # Measurement spec info from UI (for labeling live measurements)
-        measurement_specs_raw = data.get('measurement_specs')  # JSON string of spec info
-        measurement_specs = []
-        if measurement_specs_raw:
-            try:
-                measurement_specs = json.loads(measurement_specs_raw) if isinstance(measurement_specs_raw, str) else measurement_specs_raw
-                print(f"[API] Received {len(measurement_specs)} measurement specs from UI")
-            except Exception as e:
-                print(f"[WARN] Could not parse measurement_specs: {e}")
         
         # DEBUG: Log what we received
         print(f"[API] Received request for {article_style}_{annotation_name}")
@@ -350,12 +277,10 @@ def start_measurement():
                 # Sanitize filenames to prevent directory issues (e.g. "6/7" -> "6_7")
                 safe_style = str(article_style).replace('/', '_').replace('\\', '_')
                 safe_name = str(annotation_name).replace('/', '_').replace('\\', '_')
-                # Include color suffix in filename for color-specific pairing
-                color_suffix = f"-{color_code}" if color_code else ''
-                temp_image_path = os.path.join(temp_dir, f"{safe_style}_{safe_name}{color_suffix}{ext}")
+                temp_image_path = os.path.join(temp_dir, f"{safe_style}_{safe_name}{ext}")
                 
-                # Decode Base64 image data (strip data URL prefix if present)
-                image_bytes = decode_base64_image(image_data)
+                # Decode Base64 image data
+                image_bytes = base64.b64decode(image_data)
                 
                 # CRITICAL: Check if image needs to be upscaled to match keypoints
                 # Keypoints are now stored at native camera resolution (5472x2752)
@@ -410,25 +335,8 @@ def start_measurement():
                 
                 with open(temp_image_path, 'wb') as f:
                     f.write(image_bytes)
-                    f.flush()
-                    os.fsync(f.fileno())  # Force flush to disk
-                reference_image_path = os.path.abspath(temp_image_path)
-                print(f"[DB] Wrote reference image to: {reference_image_path} ({len(image_bytes)} bytes)")
-                
-                # Verify the written file is readable by OpenCV
-                img_ok, img_w, img_h = verify_image_file(reference_image_path)
-                if not img_ok:
-                    print(f"[ERR] Written image file FAILED OpenCV verification: {reference_image_path}")
-                    print(f"[ERR] File size: {os.path.getsize(reference_image_path)} bytes")
-                    # Try to detect if the bytes have a valid image header
-                    header = image_bytes[:16] if image_bytes else b''
-                    print(f"[ERR] First 16 bytes (hex): {header.hex()}")
-                    return jsonify({
-                        'status': 'error',
-                        'message': 'Reference image file is corrupted or unreadable by OpenCV'
-                    }), 400
-                else:
-                    print(f"[DB] Image verification PASSED: {img_w}x{img_h}")
+                reference_image_path = temp_image_path
+                print(f"[DB] Wrote reference image to: {temp_image_path} ({len(image_bytes)} bytes)")
                 
             except Exception as e:
                 print(f"[ERR] Failed to decode/write image: {e}")
@@ -438,7 +346,7 @@ def start_measurement():
                 }), 400
             
             # Build measurement annotation from database data
-            temp_json_path = os.path.join(temp_dir, f"{safe_style}_{safe_name}{color_suffix}.json")
+            temp_json_path = os.path.join(temp_dir, f"{safe_style}_{safe_name}.json")
             try:
                 # Parse keypoints_pixels (already in correct format [[x, y], ...])
                 if isinstance(keypoints_pixels, str):
@@ -505,17 +413,12 @@ def start_measurement():
                     'image/gif': '.gif'
                 }
                 ext = ext_map.get(image_mime_type, '.jpg')
-                safe_p2_style = str(article_style).replace('/', '_').replace('\\', '_')
-                safe_p2_name = str(annotation_name).replace('/', '_').replace('\\', '_')
-                color_suffix_p2 = f"-{color_code}" if color_code else ''
-                temp_image_path = os.path.join(temp_dir, f"{safe_p2_style}_{safe_p2_name}{color_suffix_p2}{ext}")
+                temp_image_path = os.path.join(temp_dir, f"{article_style}_{annotation_name}{ext}")
                 
-                image_bytes = decode_base64_image(image_data)
+                image_bytes = base64.b64decode(image_data)
                 with open(temp_image_path, 'wb') as f:
                     f.write(image_bytes)
-                    f.flush()
-                    os.fsync(f.fileno())
-                reference_image_path = os.path.abspath(temp_image_path)
+                reference_image_path = temp_image_path
                 
                 # Get image dimensions for coordinate conversion
                 img = Image.open(io.BytesIO(image_bytes))
@@ -539,7 +442,7 @@ def start_measurement():
                     print(f"[DB] Point '{point.get('label', 'unknown')}': ({x_percent}%, {y_percent}%) -> ({x_pixel}, {y_pixel}) px")
                 
                 # Create annotation file
-                temp_json_path = os.path.join(temp_dir, f"{safe_p2_style}_{safe_p2_name}{color_suffix_p2}.json")
+                temp_json_path = os.path.join(temp_dir, f"{article_style}_{annotation_name}.json")
                 measurement_annotation = {
                     'keypoints': keypoints,
                     'target_distances': {},
@@ -628,8 +531,7 @@ def start_measurement():
                     print(f"[DB+FILE] Loaded {len(keypoints)} keypoints from database")
                     
                     # Write annotation JSON to temp file
-                    color_suffix_p25 = f"-{color_code}" if color_code else ''
-                    temp_json_path = os.path.join(temp_dir, f"{safe_style}_{safe_name}_{side}{color_suffix_p25}.json")
+                    temp_json_path = os.path.join(temp_dir, f"{safe_style}_{safe_name}_{side}.json")
                     measurement_annotation = {
                         'keypoints': keypoints,
                         'target_distances': targets,
@@ -772,13 +674,11 @@ def start_measurement():
         config = {
             'annotation_name': annotation_name,
             'article_style': article_style,
-            'annotation_json_path': os.path.abspath(annotation_json_path) if annotation_json_path else None,
-            'reference_image_path': os.path.abspath(reference_image_path) if reference_image_path else None,
+            'annotation_json_path': annotation_json_path,
+            'reference_image_path': reference_image_path,
             'side': side,
-            'garment_color': garment_color,
             'laravel_storage': LARAVEL_STORAGE_PATH,
-            'results_path': os.path.abspath(RESULTS_PATH),
-            'measurement_specs': measurement_specs
+            'results_path': RESULTS_PATH
         }
         
         print(f"[CONFIG] Annotation JSON: {annotation_json_path}")
@@ -800,14 +700,29 @@ def start_measurement():
         def run_measurement():
             global measurement_process, measurement_status
             try:
-                # Spawn worker fully hidden – all logs go to logs/measurement.log
-                measurement_process = subprocess.Popen(
-                    ['python', 'measurement_worker.py'],
-                    **_hidden_popen_kwargs(),
-                    env={**os.environ, 'PYTHONIOENCODING': 'utf-8'},
-                    cwd=os.path.dirname(os.path.abspath(__file__))
-                )
-                print(f"[MEASUREMENT] Started measurement_worker.py with PID: {measurement_process.pid}")
+                # Run the measurement script - OpenCV GUI needs visible window
+                import platform
+                
+                if platform.system() == 'Windows':
+                    # On Windows, use CREATE_NEW_CONSOLE to:
+                    # 1. Show a visible console window for debugging
+                    # 2. Allow OpenCV GUI windows to display
+                    # This makes it easier to see errors and camera output
+                    measurement_process = subprocess.Popen(
+                        ['python', 'measurement_worker.py'],
+                        creationflags=subprocess.CREATE_NEW_CONSOLE,
+                        env={**os.environ, 'PYTHONIOENCODING': 'utf-8'},
+                        cwd=os.path.dirname(os.path.abspath(__file__))
+                    )
+                    print(f"[MEASUREMENT] Started measurement_worker.py with PID: {measurement_process.pid}")
+                    print(f"[MEASUREMENT] A new console window should open showing measurement progress")
+                else:
+                    # On other platforms, run normally
+                    measurement_process = subprocess.Popen(
+                        ['python', 'measurement_worker.py'],
+                        env={**os.environ, 'PYTHONIOENCODING': 'utf-8'},
+                        cwd=os.path.dirname(os.path.abspath(__file__))
+                    )
                 
                 measurement_status['status'] = 'running'
                 
@@ -1074,12 +989,18 @@ def start_calibration():
         try:
             calibration_status['status'] = 'running'
             
-            # Spawn worker fully hidden – logs go to logs/calibration.log
-            calibration_process = subprocess.Popen(
-                ['python', 'calibration_worker.py', '--force-new'],
-                **_hidden_popen_kwargs(),
-                env={**os.environ, 'PYTHONIOENCODING': 'utf-8'}
-            )
+            import platform
+            if platform.system() == 'Windows':
+                calibration_process = subprocess.Popen(
+                    ['python', 'calibration_worker.py', '--force-new'],
+                    creationflags=subprocess.CREATE_NEW_CONSOLE,
+                    env={**os.environ, 'PYTHONIOENCODING': 'utf-8'}
+                )
+            else:
+                calibration_process = subprocess.Popen(
+                    ['python', 'calibration_worker.py', '--force-new'],
+                    env={**os.environ, 'PYTHONIOENCODING': 'utf-8'}
+                )
             
             calibration_process.wait()
             
@@ -1254,12 +1175,23 @@ def start_registration():
             try:
                 registration_status['step'] = 'running'
                 
-                # Spawn worker fully hidden – logs go to logs/registration.log (if worker uses worker_logger)
-                registration_process = subprocess.Popen(
-                    ['python', 'registration_worker.py'],
-                    **_hidden_popen_kwargs(),
-                    env={**os.environ, 'PYTHONIOENCODING': 'utf-8'}
-                )
+                # Run the registration script in a new console window (needed for camera GUI)
+                # Use CREATE_NEW_CONSOLE flag on Windows to open a visible window
+                import platform
+                
+                if platform.system() == 'Windows':
+                    # On Windows, spawn a new console window for the interactive script
+                    registration_process = subprocess.Popen(
+                        ['python', 'registration_worker.py'],
+                        creationflags=subprocess.CREATE_NEW_CONSOLE,
+                        env={**os.environ, 'PYTHONIOENCODING': 'utf-8'}
+                    )
+                else:
+                    # On other platforms, run normally
+                    registration_process = subprocess.Popen(
+                        ['python', 'registration_worker.py'],
+                        env={**os.environ, 'PYTHONIOENCODING': 'utf-8'}
+                    )
                 
                 # Wait for completion
                 registration_process.wait()

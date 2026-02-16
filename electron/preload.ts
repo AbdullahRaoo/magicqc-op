@@ -60,7 +60,7 @@ contextBridge.exposeInMainWorld('database', {
 
 // --------- Expose Measurement API to the Renderer process ---------
 contextBridge.exposeInMainWorld('measurement', {
-  start: (config: { annotation_name: string; side?: string }) => ipcRenderer.invoke('measurement:start', config),
+  start: (config: { annotation_name: string; side?: string; garment_color?: string }) => ipcRenderer.invoke('measurement:start', config),
   stop: () => ipcRenderer.invoke('measurement:stop'),
   getStatus: () => ipcRenderer.invoke('measurement:getStatus'),
   getLiveResults: () => ipcRenderer.invoke('measurement:getLiveResults'),

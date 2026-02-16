@@ -13,6 +13,8 @@ interface MeasurementAPI {
         annotation_name: string;
         article_style?: string;
         side?: string;
+        garment_color?: string;  // 'white', 'black', or 'other'
+        color_code?: string;     // Color suffix code: 'w' (white), 'b' (black), 'z' (other)
         // New measurement-ready data from database
         keypoints_pixels?: string | null;   // JSON string [[x, y], ...] (pixel coordinates)
         target_distances?: string | null;   // JSON string {"1": 3.81, ...} (distances in cm)
@@ -23,6 +25,7 @@ interface MeasurementAPI {
         annotation_data?: string;  // JSON string of annotation points [{x, y, label}]
         image_data?: string;       // Base64 encoded reference image from database
         image_mime_type?: string;  // MIME type of the image
+        measurement_specs?: string; // JSON string of spec info [{index, db_id, code, name, expected_value}]
     }) => Promise<{ status: string; message: string; data?: any }>
     stop: () => Promise<{ status: string; message: string }>
     getStatus: () => Promise<{ status: string; data: any }>

@@ -209,13 +209,7 @@ function AppContent() {
               </div>
             </div>
 
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center text-touch-sm font-bold text-primary uppercase tracking-wide">
-                <span className="w-3 h-3 rounded-full bg-success mr-2 shadow-sm"></span>
-                Shift Active
-              </div>
-              <div className="h-5 w-px bg-slate-200"></div>
-
+            <div className="flex items-center space-x-3">
               {/* Settings Button */}
               <button
                 onClick={() => setShowSettings(true)}
