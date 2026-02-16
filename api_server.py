@@ -332,6 +332,18 @@ def start_measurement():
             measurement_status['running'] = False
             time.sleep(0.5)  # Brief delay to allow process cleanup
         
+        # ── Clean stale live_measurements.json to prevent cached data leaking ──
+        for stale_path in [
+            os.path.join(RESULTS_PATH, 'live_measurements.json'),
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), 'measurement_results', 'live_measurements.json'),
+        ]:
+            if os.path.exists(stale_path):
+                try:
+                    os.remove(stale_path)
+                    print(f"[CLEANUP] Removed stale live data: {stale_path}")
+                except Exception as e:
+                    print(f"[WARN] Could not remove stale file {stale_path}: {e}")
+        
         annotation_json_path = None
         reference_image_path = None
         

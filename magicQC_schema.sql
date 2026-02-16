@@ -44,7 +44,10 @@ CREATE TABLE IF NOT EXISTS measurements (
     tol_minus DECIMAL(10, 2),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (article_id) REFERENCES articles(id)
+    deleted_at TIMESTAMP NULL DEFAULT NULL,
+    FOREIGN KEY (article_id) REFERENCES articles(id),
+    INDEX idx_measurements_deleted_at (deleted_at),
+    INDEX idx_measurements_article_active (article_id, deleted_at)
 );
 
 -- 5. Measurement Sizes

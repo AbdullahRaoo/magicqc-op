@@ -132,6 +132,32 @@ export function ArticlesList() {
 
   const { operator } = useAuth()
 
+  // ── Centralized measurement state reset ──
+  // Clears ALL measurement-related state in one call to prevent stale/ghost data
+  const resetMeasurementState = () => {
+    setMeasurementSpecs([])
+    setMeasuredValues({})
+    setEditableTols({})
+    setSelectedMeasurementIds(new Set())
+    selectedMeasurementIdsRef.current = new Set()
+    setIsShiftLocked(false)
+    setMeasurementComplete(false)
+    setIsPollingActive(false)
+    setIsMeasurementEnabled(false)
+    setCurrentMeasurementSide(null)
+    setFrontMeasuredValues({})
+    setBackMeasuredValues({})
+    setFrontSideComplete(false)
+    setBackSideComplete(false)
+    setFrontSelectedIds(new Set())
+    setBackSelectedIds(new Set())
+    setFrontQCChecked(false)
+    setBackQCChecked(false)
+    setLastQCSide(null)
+    setFailedMeasurements([])
+    setShowQCResult(false)
+  }
+
   // Fetch brands on mount
   useEffect(() => {
     fetchBrands()
@@ -150,22 +176,24 @@ export function ArticlesList() {
       )
       console.log('[DIAG] Articles:', articlesResult.data)
 
-      // Check measurements
+      // Check measurements (exclude soft-deleted)
       const measurementsResult = await window.database.query<any>(
         `SELECT m.id, m.code, m.measurement, m.article_id, a.article_style
          FROM measurements m
-         LEFT JOIN articles a ON m.article_id = a.id`
+         LEFT JOIN articles a ON m.article_id = a.id
+         WHERE m.deleted_at IS NULL`
       )
-      console.log('[DIAG] Measurements:', measurementsResult.data)
+      console.log('[DIAG] Measurements (active):', measurementsResult.data)
 
-      // Check measurement sizes
+      // Check measurement sizes (only for active measurements)
       const sizesResult = await window.database.query<any>(
         `SELECT ms.measurement_id, ms.size, ms.value, m.code
          FROM measurement_sizes ms
-         LEFT JOIN measurements m ON ms.measurement_id = m.id
+         JOIN measurements m ON ms.measurement_id = m.id
+         WHERE m.deleted_at IS NULL
          LIMIT 30`
       )
-      console.log('[DIAG] Measurement Sizes (first 30):', sizesResult.data)
+      console.log('[DIAG] Measurement Sizes (first 30, active only):', sizesResult.data)
 
       // Check purchase orders
       const posResult = await window.database.query<any>(
@@ -242,6 +270,8 @@ export function ArticlesList() {
     // Only run if we have a selected article and size, but no PO article yet
     // This allows measurements to show as soon as article + size is selected
     if (selectedArticleId && selectedSize && !selectedPOArticleId) {
+      // HARD RESET before fetch — clears old specs so stale rows vanish immediately
+      resetMeasurementState()
       console.log('[EFFECT] Article + Size changed, loading measurements directly')
       loadMeasurementsDirectlyFromArticle(selectedArticleId, selectedSize)
     }
@@ -250,6 +280,8 @@ export function ArticlesList() {
   // Load measurement specs when PO article and size change (PO-based selection)
   useEffect(() => {
     if (selectedPOArticleId && selectedSize) {
+      // HARD RESET before fetch — clears old specs so stale rows vanish immediately
+      resetMeasurementState()
       // If we have selectedArticleId, use it directly (more reliable)
       if (selectedArticleId) {
         console.log('[EFFECT] PO Article selected but using direct article ID for measurements')
@@ -260,8 +292,7 @@ export function ArticlesList() {
       }
     } else if (!selectedArticleId) {
       // Only clear if we don't have a direct article selection
-      setMeasurementSpecs([])
-      setMeasuredValues({})
+      resetMeasurementState()
     }
   }, [selectedPOArticleId, selectedSize])
 
@@ -320,6 +351,12 @@ export function ArticlesList() {
 
             console.log('[POLLING] Received', liveData.length, 'live measurements, is_live:', result.data.is_live)
 
+            // GUARD: Skip stale data from previous measurement sessions
+            if (!result.data.is_live) {
+              console.log('[POLLING] Skipping stale data (file age:', result.data.file_age_seconds, 's)')
+              return
+            }
+
             setMeasuredValues(prev => {
               const newValues = { ...prev }
               let updated = false
@@ -337,13 +374,9 @@ export function ArticlesList() {
                   spec = measurementSpecs.find(s => s.code === liveMeasurement.spec_code)
                 }
 
-                // FALLBACK MATCH: by pair position (id - 1 as index into specs)
-                if (!spec) {
-                  const specIndex = liveMeasurement.id - 1
-                  if (specIndex >= 0 && specIndex < measurementSpecs.length) {
-                    spec = measurementSpecs[specIndex]
-                  }
-                }
+                // NOTE: Positional fallback (id-1 as array index) was removed because
+                // it could map stale live data from a PREVIOUS article to the WRONG
+                // measurement spec in the current article.
 
                 if (spec) {
                   // Only update selected (ticked) measurements with live camera values
@@ -546,7 +579,7 @@ export function ArticlesList() {
         SELECT DISTINCT ms.size
         FROM measurement_sizes ms
         JOIN measurements m ON ms.measurement_id = m.id
-        WHERE m.article_id = ?
+        WHERE m.article_id = ? AND m.deleted_at IS NULL
         ORDER BY FIELD(ms.size, 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', '3XL')
       `
       const result = await window.database.query<{ size: string }>(sql, [articleId])
@@ -672,10 +705,10 @@ export function ArticlesList() {
             COALESCE(ms.unit, 'cm') as unit,
             a.id as article_id
           FROM articles a
-          JOIN measurements m ON m.article_id = a.id
+          JOIN measurements m ON m.article_id = a.id AND m.deleted_at IS NULL
           JOIN measurement_sizes ms ON ms.measurement_id = m.id
           WHERE a.id = ? AND UPPER(TRIM(ms.size)) = UPPER(TRIM(?))
-          ORDER BY m.code
+          ORDER BY m.id
         `
         result = await window.database.query<MeasurementSpec & { article_id?: number }>(directQuery, [selectedArticleId, size])
         console.log('[SPECS] Direct article query result:', result.data?.length || 0, 'measurements')
@@ -689,106 +722,80 @@ export function ArticlesList() {
       // STRATEGY 2: Match through PO article using brand + type + style
       if (!result.data || result.data.length === 0) {
         console.log('[SPECS] Trying PO article match: brand_id + article_type_id + article_style...')
-        const comprehensiveQuery = `
-          SELECT 
-            m.id,
-            m.code,
-            m.measurement,
-            COALESCE(m.tol_plus, 0) as tol_plus,
-            COALESCE(m.tol_minus, 0) as tol_minus,
-            ms.size,
-            ms.value as expected_value,
-            COALESCE(ms.unit, 'cm') as unit,
-            a.id as article_id
-          FROM purchase_order_articles poa
-          JOIN purchase_orders po ON poa.purchase_order_id = po.id
-          JOIN articles a ON a.brand_id = po.brand_id 
-                        AND a.article_type_id = poa.article_type_id
-                        AND a.article_style = poa.article_style
-          JOIN measurements m ON m.article_id = a.id
-          JOIN measurement_sizes ms ON ms.measurement_id = m.id
-          WHERE poa.id = ? AND UPPER(TRIM(ms.size)) = UPPER(TRIM(?))
-          ORDER BY m.code
-        `
-        result = await window.database.query<MeasurementSpec & { article_id?: number }>(comprehensiveQuery, [poArticleId, size])
-        console.log('[SPECS] PO article match result:', result.data?.length || 0, 'measurements')
+        // STEP 1: Find the SINGLE most-recently-updated article matching the PO
+        // (prevents phantom measurements from duplicate articles with same brand+type+style)
+        const articleLookup = await window.database.query<{ id: number }>(
+          `SELECT a.id
+           FROM purchase_order_articles poa
+           JOIN purchase_orders po ON poa.purchase_order_id = po.id
+           JOIN articles a ON a.brand_id = po.brand_id
+                         AND a.article_type_id = poa.article_type_id
+                         AND a.article_style = poa.article_style
+           WHERE poa.id = ?
+           ORDER BY a.updated_at DESC
+           LIMIT 1`,
+          [poArticleId]
+        )
 
-        if (result.data && result.data.length > 0 && result.data[0].article_id) {
-          fetchAvailableSizes(result.data[0].article_id)
+        if (articleLookup.success && articleLookup.data && articleLookup.data.length > 0) {
+          const matchedArticleId = articleLookup.data[0].id
+          console.log('[SPECS] PO article resolved to single article ID:', matchedArticleId)
+
+          // STEP 2: Fetch measurements for that SINGLE article (same query shape as Strategy 1)
+          const comprehensiveQuery = `
+            SELECT 
+              m.id,
+              m.code,
+              m.measurement,
+              COALESCE(m.tol_plus, 0) as tol_plus,
+              COALESCE(m.tol_minus, 0) as tol_minus,
+              ms.size,
+              ms.value as expected_value,
+              COALESCE(ms.unit, 'cm') as unit,
+              a.id as article_id
+            FROM articles a
+            JOIN measurements m ON m.article_id = a.id AND m.deleted_at IS NULL
+            JOIN measurement_sizes ms ON ms.measurement_id = m.id
+            WHERE a.id = ? AND UPPER(TRIM(ms.size)) = UPPER(TRIM(?))
+            ORDER BY m.id
+          `
+          result = await window.database.query<MeasurementSpec & { article_id?: number }>(comprehensiveQuery, [matchedArticleId, size])
+          console.log('[SPECS] PO article match result:', result.data?.length || 0, 'measurements for article', matchedArticleId)
+
+          if (result.data && result.data.length > 0) {
+            fetchAvailableSizes(matchedArticleId)
+          }
+        } else {
+          console.log('[SPECS] PO article match: no matching article found')
         }
       }
 
-      // STRATEGY 3: Match by brand + type only (style might differ slightly)
-      if (!result.data || result.data.length === 0) {
-        console.log('[SPECS] Trying fallback: brand_id + article_type_id match...')
-        const fallback1Query = `
-          SELECT 
-            m.id,
-            m.code,
-            m.measurement,
-            COALESCE(m.tol_plus, 0) as tol_plus,
-            COALESCE(m.tol_minus, 0) as tol_minus,
-            ms.size,
-            ms.value as expected_value,
-            COALESCE(ms.unit, 'cm') as unit,
-            a.id as article_id
-          FROM purchase_order_articles poa
-          JOIN purchase_orders po ON poa.purchase_order_id = po.id
-          JOIN articles a ON a.brand_id = po.brand_id AND a.article_type_id = poa.article_type_id
-          JOIN measurements m ON m.article_id = a.id
-          JOIN measurement_sizes ms ON ms.measurement_id = m.id
-          WHERE poa.id = ? AND UPPER(TRIM(ms.size)) = UPPER(TRIM(?))
-          ORDER BY m.code
-          LIMIT 50
-        `
-        result = await window.database.query<MeasurementSpec & { article_id?: number }>(fallback1Query, [poArticleId, size])
-        console.log('[SPECS] Fallback 1 result:', result.data?.length || 0, 'measurements')
-
-        if (result.data && result.data.length > 0 && result.data[0].article_id) {
-          fetchAvailableSizes(result.data[0].article_id)
-        }
-      }
-
-      // STRATEGY 4: Match by article_type_id only
-      if (!result.data || result.data.length === 0) {
-        console.log('[SPECS] Trying fallback: article_type_id only...')
-        const fallback2Query = `
-          SELECT 
-            m.id,
-            m.code,
-            m.measurement,
-            COALESCE(m.tol_plus, 0) as tol_plus,
-            COALESCE(m.tol_minus, 0) as tol_minus,
-            ms.size,
-            ms.value as expected_value,
-            COALESCE(ms.unit, 'cm') as unit,
-            a.id as article_id
-          FROM purchase_order_articles poa
-          JOIN articles a ON a.article_type_id = poa.article_type_id
-          JOIN measurements m ON m.article_id = a.id
-          JOIN measurement_sizes ms ON ms.measurement_id = m.id
-          WHERE poa.id = ? AND UPPER(TRIM(ms.size)) = UPPER(TRIM(?))
-          ORDER BY m.code
-          LIMIT 50
-        `
-        result = await window.database.query<MeasurementSpec & { article_id?: number }>(fallback2Query, [poArticleId, size])
-        console.log('[SPECS] Fallback 2 result:', result.data?.length || 0, 'measurements')
-
-        if (result.data && result.data.length > 0 && result.data[0].article_id) {
-          fetchAvailableSizes(result.data[0].article_id)
-        }
-      }
+      // NOTE: Strategies 3 & 4 (loose brand+type / type-only fallbacks) were removed
+      // because they could match WRONG articles sharing the same article_type_id,
+      // injecting phantom measurements that don't belong to the selected article.
+      // Only exact article ID match (Strategy 1) and exact PO brand+type+style
+      // match (Strategy 2) are used to guarantee data integrity.
 
       // Process results
       if (result.success && result.data && result.data.length > 0) {
-        console.log('[SPECS] ✓ SUCCESS! Loaded', result.data.length, 'measurements:', result.data.map((m: MeasurementSpec) => m.code).join(', '))
+        // DIAGNOSTIC: Log full spec details so any phantom data can be traced
+        console.log('[SPECS] ✓ SUCCESS! Loaded', result.data.length, 'measurements:', result.data.map((m: MeasurementSpec) => `${m.code}/${m.measurement}(id=${m.id})`).join(', '))
+        // DIAGNOSTIC: Detect multi-article contamination
+        const articleIds = [...new Set(result.data.map((m: MeasurementSpec & { article_id?: number }) => m.article_id).filter(Boolean))]
+        if (articleIds.length > 1) {
+          console.error('[SPECS] ⚠ WARNING: Measurements come from MULTIPLE articles:', articleIds, '— this should not happen! Only the first article will be used.')
+          // Filter to only the first article's measurements to prevent phantom rows
+          const primaryArticleId = articleIds[0]
+          result.data = result.data.filter((m: MeasurementSpec & { article_id?: number }) => m.article_id === primaryArticleId)
+          console.log('[SPECS] Filtered to', result.data.length, 'measurements from article', primaryArticleId)
+        }
         setMeasurementSpecs(result.data)
         const initialValues: Record<number, string> = {}
         result.data.forEach((spec: MeasurementSpec) => {
           initialValues[spec.id] = ''
         })
         setMeasuredValues(initialValues)
-        loadExistingMeasurements(result.data)
+        loadExistingMeasurements(poArticleId)
       } else {
         console.log('[SPECS] ✗ No measurements found for any query strategy')
         setMeasurementSpecs([])
@@ -797,6 +804,8 @@ export function ArticlesList() {
     } catch (err) {
       console.error('[SPECS] ✗ FATAL ERROR:', err)
       setMeasurementSpecs([])
+      setMeasuredValues({})
+      setEditableTols({})
     }
   }
 
@@ -1575,25 +1584,7 @@ export function ArticlesList() {
       setSelectedSize(null)
       setSelectedColor(null)
 
-      setMeasurementSpecs([])
-      setMeasuredValues({})
-      setEditableTols({})
-      setFrontMeasuredValues({})
-      setBackMeasuredValues({})
-      setFrontSideComplete(false)
-      setBackSideComplete(false)
-      setFrontSelectedIds(new Set())
-      setBackSelectedIds(new Set())
-      setFrontQCChecked(false)
-      setBackQCChecked(false)
-      setLastQCSide(null)
-      setCurrentMeasurementSide(null)
-      setMeasurementComplete(false)
-      setIsMeasurementEnabled(false)
-      setIsPollingActive(false)
-      setIsShiftLocked(false)
-      setSelectedMeasurementIds(new Set())
-      selectedMeasurementIdsRef.current = new Set()
+      resetMeasurementState()
       setDisplayUnit('cm')
 
       setArticleTypes([])
@@ -1971,15 +1962,8 @@ export function ArticlesList() {
     // Reset job card
     setJobCardSummary(null)
 
-    // Reset measurement states
-    setMeasurementSpecs([])
-    setMeasuredValues({})
-    setEditableTols({})
-
-    // Reset lifecycle states
-    setIsPollingActive(false)
-    setMeasurementComplete(false)
-    setIsMeasurementEnabled(false)
+    // Reset all measurement states in one call
+    resetMeasurementState()
 
     // Clear errors
     setError(null)
@@ -2004,11 +1988,8 @@ export function ArticlesList() {
     const saved = await saveMeasurements()
     console.log('[BACK] Current measurements saved:', saved)
 
-    // Reset lifecycle states
-    setIsPollingActive(false)
-    setMeasurementComplete(false)
-    setIsMeasurementEnabled(false)
-    setEditableTols({})
+    // Reset all measurement state for clean transition
+    resetMeasurementState()
 
     if (currentPOArticleIndex > 0) {
       const prevIndex = currentPOArticleIndex - 1
@@ -2036,6 +2017,7 @@ export function ArticlesList() {
       const sql = `
         SELECT mr.measurement_id, mr.measured_value, mr.status, mr.tol_plus, mr.tol_minus
         FROM measurement_results mr
+        JOIN measurements m ON m.id = mr.measurement_id AND m.deleted_at IS NULL
         WHERE mr.purchase_order_article_id = ?
         AND mr.size = ?
       `
@@ -2086,16 +2068,10 @@ export function ArticlesList() {
     // Save before going back
     await saveMeasurements()
 
-    // Reset all states
-    setIsPollingActive(false)
-    setMeasurementComplete(false)
-    setIsMeasurementEnabled(false)
-    setEditableTols({})
+    // Reset all measurement states
+    resetMeasurementState()
     setSelectedPOId(null)
     setSelectedPOArticleId(null)
-    setMeasurementSpecs([])
-    setMeasuredValues({})
-    setIsMeasurementEnabled(false)
     setError(null)
   }
 
@@ -2107,9 +2083,9 @@ export function ArticlesList() {
     setSelectedPOId(null)
     setSelectedPOArticleId(null)
     setPurchaseOrders([])
-    setMeasurementSpecs([])
-    setMeasuredValues({})
-    setAvailableSizes(['S', 'M', 'L', 'XL', 'XXL']) // Reset to defaults
+    resetMeasurementState()
+    setSelectedSize(null)
+    setAvailableSizes(['S', 'M', 'L', 'XL', 'XXL'])
   }
 
   const handleArticleChange = async (articleId: number | null) => {
@@ -2117,8 +2093,7 @@ export function ArticlesList() {
     setSelectedArticleId(articleId)
     setSelectedPOId(null)
     setSelectedPOArticleId(null)
-    setMeasurementSpecs([])
-    setMeasuredValues({})
+    resetMeasurementState()
 
     const article = articles.find(a => a.id === articleId)
     if (article) {
@@ -2153,7 +2128,7 @@ export function ArticlesList() {
         SELECT DISTINCT ms.size
         FROM measurement_sizes ms
         JOIN measurements m ON ms.measurement_id = m.id
-        WHERE m.article_id = ?
+        WHERE m.article_id = ? AND m.deleted_at IS NULL
         ORDER BY FIELD(ms.size, 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', '3XL')
       `
       const result = await window.database.query<{ size: string }>(sql, [articleId])
@@ -2186,16 +2161,16 @@ export function ArticlesList() {
           COALESCE(ms.unit, 'cm') as unit,
           a.id as article_id
         FROM articles a
-        JOIN measurements m ON m.article_id = a.id
+        JOIN measurements m ON m.article_id = a.id AND m.deleted_at IS NULL
         JOIN measurement_sizes ms ON ms.measurement_id = m.id
         WHERE a.id = ? AND UPPER(TRIM(ms.size)) = UPPER(TRIM(?))
-        ORDER BY m.code
+        ORDER BY m.id
       `
       const result = await window.database.query<MeasurementSpec & { article_id?: number }>(directQuery, [articleId, size])
       console.log('[DIRECT_LOAD] Query result:', result.data?.length || 0, 'measurements')
 
       if (result.success && result.data && result.data.length > 0) {
-        console.log('[DIRECT_LOAD] ✓ Loaded measurements:', result.data.map((m: MeasurementSpec) => m.code).join(', '))
+        console.log('[DIRECT_LOAD] ✓ Loaded measurements:', result.data.map((m: MeasurementSpec) => `${m.code}/${m.measurement}(id=${m.id})`).join(', '))
         setMeasurementSpecs(result.data as MeasurementSpec[])
         const initialValues: Record<number, string> = {}
         result.data.forEach((spec: MeasurementSpec) => {
@@ -2210,6 +2185,8 @@ export function ArticlesList() {
     } catch (err) {
       console.error('[DIRECT_LOAD] Error:', err)
       setMeasurementSpecs([])
+      setMeasuredValues({})
+      setEditableTols({})
     }
   }
 
@@ -2221,9 +2198,9 @@ export function ArticlesList() {
     setSelectedPOId(null)
     setSelectedPOArticleId(null)
     setPurchaseOrders([])
-    setMeasurementSpecs([])
-    setMeasuredValues({})
-    setAvailableSizes(['S', 'M', 'L', 'XL', 'XXL']) // Reset to defaults
+    resetMeasurementState()
+    setSelectedSize(null)
+    setAvailableSizes(['S', 'M', 'L', 'XL', 'XXL'])
   }
 
   // Handle size change - reload measurements for new size
@@ -2231,8 +2208,9 @@ export function ArticlesList() {
     console.log('[SELECTION] Size changed to:', size)
     console.log('[SELECTION] Current selectedArticleId:', selectedArticleId)
     console.log('[SELECTION] Current selectedPOArticleId:', selectedPOArticleId)
+    // HARD RESET all measurement state before changing size — prevents stale rows
+    resetMeasurementState()
     setSelectedSize(size)
-    setMeasuredValues({})
 
     // Load measurements for the new size
     // Priority: use selectedArticleId if available (most reliable), otherwise use selectedPOArticleId
@@ -2613,16 +2591,9 @@ export function ArticlesList() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {/* Render measurement specs - auto-shift only when measurement mode active (Front/Back pressed) */}
+                {/* Render measurement specs - stable order preserved from database (no client-side sorting) */}
                 {measurementSpecs.length > 0 ? (
-                  (isShiftLocked
-                    ? [...measurementSpecs].sort((a, b) => {
-                        const aSelected = selectedMeasurementIds.has(a.id) ? 0 : 1
-                        const bSelected = selectedMeasurementIds.has(b.id) ? 0 : 1
-                        return aSelected - bSelected
-                      })
-                    : measurementSpecs
-                  ).map((spec) => {
+                  measurementSpecs.map((spec) => {
                     const status = calculateStatus(spec)
                     return (
                       <tr key={spec.id} className={`transition-colors ${
