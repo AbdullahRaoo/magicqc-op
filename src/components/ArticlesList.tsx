@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useAuth } from '../context/AuthContext'
 import type {
   ArticleWithRelations,
@@ -34,19 +34,9 @@ export function ArticlesList() {
   // Article color selection state
   const [selectedColor, setSelectedColor] = useState<'white' | 'other' | 'black' | null>(null)
 
-  // Unit display toggle: 'cm' (default) or 'inch' — purely visual, all internal values stay in cm
-  const [displayUnit, setDisplayUnit] = useState<'cm' | 'inch'>('cm')
+  // Unit conversion constants
   const CM_TO_INCH = 0.393701
-  /** Convert a cm numeric value to the active display unit, rounded to 2 decimals */
-  const toDisplayUnit = (cmValue: number): string => {
-    if (displayUnit === 'inch') return (cmValue * CM_TO_INCH).toFixed(2)
-    return cmValue.toFixed(2)
-  }
-  /** Display label for tolerance: ±val in current unit */
-  const tolDisplay = (cmValue: number): string => {
-    if (displayUnit === 'inch') return (cmValue * CM_TO_INCH).toFixed(2)
-    return cmValue.toFixed(2)
-  }
+  const INCH_TO_CM = 2.54
 
   // Auto-dismiss error after 6 seconds
   useEffect(() => {
@@ -82,6 +72,38 @@ export function ArticlesList() {
   const [measuredValues, setMeasuredValues] = useState<Record<number, string>>({})
   const [isMeasurementEnabled, setIsMeasurementEnabled] = useState(false)
 
+  // ── Unit handling (must be AFTER measurementSpecs declaration) ──
+  // baseUnit: the raw unit string from the DB for the loaded specs — purely informational, no fallback
+  // displayResultUnit: the unit the RESULT column is currently shown in (toggled by Convert Result button)
+  const baseUnit: string = useMemo(() => {
+    if (measurementSpecs.length > 0 && measurementSpecs[0].unit) {
+      return measurementSpecs[0].unit
+    }
+    return ''
+  }, [measurementSpecs])
+
+  const [displayResultUnit, setDisplayResultUnit] = useState<'cm' | 'inch'>('cm')
+
+  // Auto-sync displayResultUnit to baseUnit whenever specs change (new article loaded)
+  useEffect(() => {
+    const lower = baseUnit.toLowerCase()
+    if (lower === 'inch' || lower === 'cm') {
+      setDisplayResultUnit(lower as 'cm' | 'inch')
+    }
+  }, [baseUnit])
+
+  /** Convert a measured result value for display in the RESULT column only.
+   *  The measured value (from camera) is always in cm.
+   *  - If baseUnit is 'cm' and displayResultUnit is 'inch' → convert cm→inch
+   *  - If baseUnit is 'inch' and displayResultUnit is 'cm' → convert cm→cm (no-op, camera is cm)
+   *  - If baseUnit is 'inch' and displayResultUnit is 'inch' → convert cm→inch
+   *  In short: result display follows displayResultUnit, source is always cm from camera.
+   */
+  const convertResultForDisplay = (cmValue: number): string => {
+    if (displayResultUnit === 'inch') return (cmValue * CM_TO_INCH).toFixed(2)
+    return cmValue.toFixed(2)
+  }
+
   // Live measurement lifecycle states
   const [isPollingActive, setIsPollingActive] = useState(false)
   const [measurementComplete, setMeasurementComplete] = useState(false)
@@ -116,6 +138,7 @@ export function ArticlesList() {
 
   // Front/Back side measurement tracking
   const [currentMeasurementSide, setCurrentMeasurementSide] = useState<'front' | 'back' | null>(null)
+  const currentMeasurementSideRef = useRef<'front' | 'back' | null>(null)
   const [frontMeasuredValues, setFrontMeasuredValues] = useState<Record<number, string>>({})
   const [backMeasuredValues, setBackMeasuredValues] = useState<Record<number, string>>({})
   const [frontSideComplete, setFrontSideComplete] = useState(false)
@@ -318,10 +341,13 @@ export function ArticlesList() {
     }
   }, [measurementSpecs])
 
-  // Keep ref in sync with state for use in polling interval
+  // Keep refs in sync with state for use in polling interval closures
   useEffect(() => {
     selectedMeasurementIdsRef.current = selectedMeasurementIds
   }, [selectedMeasurementIds])
+  useEffect(() => {
+    currentMeasurementSideRef.current = currentMeasurementSide
+  }, [currentMeasurementSide])
 
   // Poll for live results when polling is active
   useEffect(() => {
@@ -340,16 +366,14 @@ export function ArticlesList() {
           const result = await window.measurement.getLiveResults()
 
           if (result.status === 'success' && result.data && result.data.measurements) {
-            const liveData = result.data.measurements as Array<{
-              id: number
-              name: string
-              actual_cm: number
-              qc_passed: boolean
-              spec_id?: number
-              spec_code?: string
-            }>
+            const liveData = result.data.measurements as Array<Record<string, unknown>>
 
-            console.log('[POLLING] Received', liveData.length, 'live measurements, is_live:', result.data.is_live)
+            // DIAGNOSTIC: Log raw liveData structure on first poll and periodically
+            console.log('[POLLING] Received', liveData.length, 'live measurements, is_live:', result.data.is_live, 'side:', currentMeasurementSideRef.current)
+            if (liveData.length > 0) {
+              console.log('[POLLING-RAW] First entry keys:', Object.keys(liveData[0]).join(', '))
+              console.log('[POLLING-RAW] Sample:', JSON.stringify(liveData[0]))
+            }
 
             // GUARD: Skip stale data from previous measurement sessions
             if (!result.data.is_live) {
@@ -357,43 +381,80 @@ export function ArticlesList() {
               return
             }
 
+            /** Normalize a numeric value from a live measurement entry.
+             *  The CV engine may return the value under different keys depending on version. */
+            const extractNumericValue = (entry: Record<string, unknown>): number | null => {
+              for (const key of ['actual_cm', 'value', 'measurement', 'distance', 'result']) {
+                const v = entry[key]
+                if (typeof v === 'number' && isFinite(v)) return v
+                if (typeof v === 'string') { const n = parseFloat(v); if (isFinite(n)) return n }
+              }
+              // Raw array entry: [index, value] or just a number
+              if (Array.isArray(entry)) {
+                const num = typeof entry[1] === 'number' ? entry[1] : typeof entry[0] === 'number' ? entry[0] : null
+                if (num !== null && isFinite(num)) return num
+              }
+              return null
+            }
+
             setMeasuredValues(prev => {
               const newValues = { ...prev }
               let updated = false
+              const isBackSide = currentMeasurementSideRef.current === 'back'
 
-              liveData.forEach((liveMeasurement) => {
-                let spec: typeof measurementSpecs[0] | undefined
-
-                // PRIMARY MATCH: by spec_id (database ID) - most reliable
-                if (liveMeasurement.spec_id) {
-                  spec = measurementSpecs.find(s => s.id === liveMeasurement.spec_id)
+              if (isBackSide) {
+                // ── BACK SIDE: Sequential assignment to selected empty rows ──
+                // Ignore spec_id/spec_code (may be front-side indexing).
+                // Extract all numeric values, then fill selected+empty slots in visual order.
+                const incomingValues: number[] = []
+                for (const entry of liveData) {
+                  const num = extractNumericValue(entry)
+                  if (num !== null) incomingValues.push(num)
                 }
+                console.log('[POLLING-BACK] Extracted', incomingValues.length, 'numeric values from', liveData.length, 'entries')
 
-                // SECONDARY MATCH: by spec_code (e.g., 'A', 'B')
-                if (!spec && liveMeasurement.spec_code) {
-                  spec = measurementSpecs.find(s => s.code === liveMeasurement.spec_code)
+                let valIdx = 0
+                for (const spec of measurementSpecs) {
+                  if (valIdx >= incomingValues.length) break
+                  // Must be selected
+                  if (!selectedMeasurementIdsRef.current.has(spec.id)) continue
+                  // Must be currently empty
+                  if (newValues[spec.id] && newValues[spec.id] !== '') continue
+                  const newValue = incomingValues[valIdx].toFixed(2)
+                  console.log(`[POLLING-BACK] Slot ${valIdx}: ${spec.code} "${spec.measurement}" (id=${spec.id}) <- ${newValue} cm`)
+                  newValues[spec.id] = newValue
+                  updated = true
+                  valIdx++
                 }
+              } else {
+                // ── FRONT SIDE: Match by spec_id / spec_code ──
+                liveData.forEach((entry) => {
+                  const liveMeasurement = entry as { spec_id?: number; spec_code?: string; actual_cm?: number; [k: string]: unknown }
+                  let spec: typeof measurementSpecs[0] | undefined
 
-                // NOTE: Positional fallback (id-1 as array index) was removed because
-                // it could map stale live data from a PREVIOUS article to the WRONG
-                // measurement spec in the current article.
-
-                if (spec) {
-                  // Only update selected (ticked) measurements with live camera values
-                  if (!selectedMeasurementIdsRef.current.has(spec.id)) return
-
-                  const newValue = liveMeasurement.actual_cm.toFixed(2)
-
-                  if (newValues[spec.id] !== newValue) {
-                    console.log(`[POLLING] ${spec.code} "${spec.measurement}" (id=${spec.id}): ${prev[spec.id] || 'empty'} -> ${newValue} cm`)
-                    newValues[spec.id] = newValue
-                    updated = true
+                  if (liveMeasurement.spec_id) {
+                    spec = measurementSpecs.find(s => s.id === liveMeasurement.spec_id)
                   }
-                }
-              })
+                  if (!spec && liveMeasurement.spec_code) {
+                    spec = measurementSpecs.find(s => s.code === liveMeasurement.spec_code)
+                  }
+
+                  if (spec) {
+                    if (!selectedMeasurementIdsRef.current.has(spec.id)) return
+                    const numVal = extractNumericValue(entry)
+                    if (numVal === null) return
+                    const newValue = numVal.toFixed(2)
+                    if (newValues[spec.id] !== newValue) {
+                      console.log(`[POLLING] ${spec.code} "${spec.measurement}" (id=${spec.id}): ${prev[spec.id] || 'empty'} -> ${newValue} cm`)
+                      newValues[spec.id] = newValue
+                      updated = true
+                    }
+                  }
+                })
+              }
 
               if (updated) {
-                console.log('[POLLING] Updated values:', Object.keys(newValues).length, 'measurements')
+                console.log('[POLLING] Updated values:', Object.keys(newValues).filter(k => newValues[Number(k)] !== '').length, 'non-empty measurements')
               }
               return updated ? newValues : prev
             })
@@ -702,7 +763,7 @@ export function ArticlesList() {
             COALESCE(m.tol_minus, 0) as tol_minus,
             ms.size,
             ms.value as expected_value,
-            COALESCE(ms.unit, 'cm') as unit,
+            ms.unit as unit,
             a.id as article_id
           FROM articles a
           JOIN measurements m ON m.article_id = a.id AND m.deleted_at IS NULL
@@ -751,7 +812,7 @@ export function ArticlesList() {
               COALESCE(m.tol_minus, 0) as tol_minus,
               ms.size,
               ms.value as expected_value,
-              COALESCE(ms.unit, 'cm') as unit,
+              ms.unit as unit,
               a.id as article_id
             FROM articles a
             JOIN measurements m ON m.article_id = a.id AND m.deleted_at IS NULL
@@ -867,14 +928,26 @@ export function ArticlesList() {
     })
   }
 
-  // Direct status calculation - always uses cm internally (measuredValues are always in cm)
+  // Direct status calculation — unit-aware.
+  // For SELECTED rows: measuredValues contains raw cm from camera.
+  //   → convert to spec unit (baseUnit) before comparing against expected_value ± tolerance.
+  // For UNSELECTED rows: measuredValues contains spec.expected_value (already in spec unit).
+  //   → comparing directly against expected_value will naturally PASS.
   const calculateStatus = (spec: MeasurementSpec): 'PASS' | 'FAIL' | 'PENDING' => {
     const valueStr = measuredValues[spec.id]
     if (!valueStr || valueStr === '') return 'PENDING'
-    const valueCm = parseFloat(valueStr) // Always cm
-    if (isNaN(valueCm)) return 'PENDING'
+    const rawValue = parseFloat(valueStr)
+    if (isNaN(rawValue)) return 'PENDING'
 
-    // Tolerances are always stored/edited in cm
+    const isSelected = selectedMeasurementIds.has(spec.id)
+    const specUnitIsInch = baseUnit.toLowerCase().includes('inch')
+
+    // Convert raw value to spec unit for comparison:
+    // - Selected rows have cm from camera → convert if spec is inches
+    // - Unselected rows already hold expected_value in spec unit → no conversion
+    const valueInSpecUnit = (isSelected && specUnitIsInch) ? rawValue * CM_TO_INCH : rawValue
+
+    // Tolerances and expected are always in spec unit (from DB)
     const tols = editableTols[spec.id]
     const tolPlus = tols ? (parseFloat(tols.tol_plus) || parseFloat(String(spec.tol_plus)) || 0) : (parseFloat(String(spec.tol_plus)) || 0)
     const tolMinus = tols ? (parseFloat(tols.tol_minus) || parseFloat(String(spec.tol_minus)) || 0) : (parseFloat(String(spec.tol_minus)) || 0)
@@ -883,7 +956,7 @@ export function ArticlesList() {
     const minValid = expectedValue - tolMinus
     const maxValid = expectedValue + tolPlus
 
-    const isPass = valueCm >= minValid && valueCm <= maxValid
+    const isPass = valueInSpecUnit >= minValid && valueInSpecUnit <= maxValid
 
     return isPass ? 'PASS' : 'FAIL'
   }
@@ -1327,15 +1400,20 @@ export function ArticlesList() {
           const tolPlus = parseFloat(String(spec.tol_plus)) || 0
           const tolMinus = parseFloat(String(spec.tol_minus)) || 0
 
+          // Convert measured cm to spec unit for comparison
+          const specUnitIsInch = baseUnit.toLowerCase().includes('inch')
+          const isSelected = selectedMeasurementIds.has(spec.id)
+          const valueInSpecUnit = (isSelected && specUnitIsInch) ? value * CM_TO_INCH : value
+
           const minValid = expected - tolMinus
           const maxValid = expected + tolPlus
 
-          if (value < minValid || value > maxValid) {
+          if (valueInSpecUnit < minValid || valueInSpecUnit > maxValid) {
             failed.push({
               code: spec.code,
               measurement: spec.measurement,
               expected: expected,
-              actual: value
+              actual: valueInSpecUnit
             })
           }
         })
@@ -1373,41 +1451,73 @@ export function ArticlesList() {
       let finalMeasuredValues = { ...measuredValues }
       
       if (finalResult.status === 'success' && finalResult.data && finalResult.data.measurements) {
-        const liveData = finalResult.data.measurements as Array<{
-          id: number
-          actual_cm: number
-          spec_id?: number
-          spec_code?: string
-        }>
+        const liveData = finalResult.data.measurements as Array<Record<string, unknown>>
 
-        // Update measured values with final readings — ONLY for selected (checked) POMs
-        liveData.forEach((liveMeasurement) => {
-          let spec: typeof measurementSpecs[0] | undefined
+        // DIAGNOSTIC: Log raw final liveData
+        console.log('[STOP] Final live data:', liveData.length, 'entries, side:', currentMeasurementSide)
+        if (liveData.length > 0) {
+          console.log('[STOP-RAW] First entry keys:', Object.keys(liveData[0]).join(', '))
+          console.log('[STOP-RAW] Full payload:', JSON.stringify(liveData.slice(0, 3)))
+        }
 
-          // PRIMARY: match by spec_id
-          if (liveMeasurement.spec_id) {
-            spec = measurementSpecs.find(s => s.id === liveMeasurement.spec_id)
+        /** Normalize a numeric value from a live measurement entry. */
+        const extractNumericValue = (entry: Record<string, unknown>): number | null => {
+          for (const key of ['actual_cm', 'value', 'measurement', 'distance', 'result']) {
+            const v = entry[key]
+            if (typeof v === 'number' && isFinite(v)) return v
+            if (typeof v === 'string') { const n = parseFloat(v); if (isFinite(n)) return n }
           }
-          // SECONDARY: match by spec_code
-          if (!spec && liveMeasurement.spec_code) {
-            spec = measurementSpecs.find(s => s.code === liveMeasurement.spec_code)
+          if (Array.isArray(entry)) {
+            const num = typeof entry[1] === 'number' ? entry[1] : typeof entry[0] === 'number' ? entry[0] : null
+            if (num !== null && isFinite(num)) return num
           }
-          // FALLBACK: match by position
-          if (!spec) {
-            const specIndex = liveMeasurement.id - 1
-            if (specIndex >= 0 && specIndex < measurementSpecs.length) {
-              spec = measurementSpecs[specIndex]
+          return null
+        }
+
+        const isBackSide = currentMeasurementSide === 'back'
+
+        if (isBackSide) {
+          // ── BACK SIDE: Sequential assignment to selected empty rows ──
+          const incomingValues: number[] = []
+          for (const entry of liveData) {
+            const num = extractNumericValue(entry)
+            if (num !== null) incomingValues.push(num)
+          }
+          console.log('[STOP-BACK] Extracted', incomingValues.length, 'numeric values')
+
+          let valIdx = 0
+          for (const spec of measurementSpecs) {
+            if (valIdx >= incomingValues.length) break
+            if (!selectedMeasurementIds.has(spec.id)) continue
+            if (finalMeasuredValues[spec.id] && finalMeasuredValues[spec.id] !== '') continue
+            const val = incomingValues[valIdx].toFixed(2)
+            console.log(`[STOP-BACK] Slot ${valIdx}: ${spec.code} "${spec.measurement}" (id=${spec.id}) <- ${val} cm`)
+            finalMeasuredValues[spec.id] = val
+            valIdx++
+          }
+        } else {
+          // ── FRONT SIDE: Match by spec_id / spec_code ──
+          liveData.forEach((entry) => {
+            const liveMeasurement = entry as { spec_id?: number; spec_code?: string; [k: string]: unknown }
+            let spec: typeof measurementSpecs[0] | undefined
+
+            if (liveMeasurement.spec_id) {
+              spec = measurementSpecs.find(s => s.id === liveMeasurement.spec_id)
             }
-          }
+            if (!spec && liveMeasurement.spec_code) {
+              spec = measurementSpecs.find(s => s.code === liveMeasurement.spec_code)
+            }
 
-          // STRICT: only update checked measurements; unchecked rows keep their original value
-          if (spec && selectedMeasurementIds.has(spec.id)) {
-            finalMeasuredValues[spec.id] = liveMeasurement.actual_cm.toFixed(2)
-            console.log(`[STOP] ✓ ${spec.code} "${spec.measurement}": ${liveMeasurement.actual_cm.toFixed(2)} cm (selected)`)
-          } else if (spec) {
-            console.log(`[STOP] ✗ ${spec.code} skipped (unchecked) — keeping original value: ${finalMeasuredValues[spec.id] || spec.expected_value}`)
-          }
-        })
+            if (spec && selectedMeasurementIds.has(spec.id)) {
+              const numVal = extractNumericValue(entry)
+              if (numVal === null) return
+              finalMeasuredValues[spec.id] = numVal.toFixed(2)
+              console.log(`[STOP] ✓ ${spec.code} "${spec.measurement}": ${numVal.toFixed(2)} cm (selected)`)
+            } else if (spec) {
+              console.log(`[STOP] ✗ ${spec.code} skipped (unchecked)`)
+            }
+          })
+        }
         
         setMeasuredValues(finalMeasuredValues)
       }
@@ -1454,157 +1564,161 @@ export function ArticlesList() {
     setMeasurementComplete(false) // Allow further measurements
   }
 
-  // Handle Next Article - robust atomic save + verification before navigating
+  // Handle Next Article — proper industrial inspection flow:
+  //   • No QC / no measurements → skip save, reset panel, move on
+  //   • QC performed → single atomic save, lightweight confirmation, then reset
   const handleNextArticle = async () => {
-    console.log('[NEXT] Moving to next article - saving measurements...')
+    console.log('[NEXT] Next Article pressed')
     setIsSavingNextArticle(true)
     setError(null)
 
-    const MAX_RETRIES = 2
-    let saveSucceeded = false
+    // ── Determine if any real measurement work was done ──
+    const hasCompletedSide = frontSideComplete || backSideComplete
+    const hasFrontData = frontSideComplete && Object.keys(frontMeasuredValues).length > 0
+    const hasBackData  = backSideComplete  && Object.keys(backMeasuredValues).length > 0
+    const hasAnyData   = hasFrontData || hasBackData
 
+    // ════════════════════════════════════════════════════════════════════
+    // FAST PATH: No measurement work was done — just reset and move on.
+    // No save attempt, no verification, no error.
+    // ════════════════════════════════════════════════════════════════════
+    if (!hasCompletedSide || !hasAnyData) {
+      console.log('[NEXT] No completed measurement session — skipping save, resetting panel')
+      resetPanelForNextArticle()
+      setIsSavingNextArticle(false)
+      return
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // SAVE PATH: At least one side has real measured values — persist.
+    // ════════════════════════════════════════════════════════════════════
     try {
       const articleStyle = jobCardSummary?.article_style ||
         articles.find(a => a.id === selectedArticleId)?.article_style
 
-      // ── Step 1: Save per-side detailed measurements (only checked POMs) ──
-      for (let attempt = 0; attempt <= MAX_RETRIES && !saveSucceeded; attempt++) {
+      // ── Step 1: Atomic save — per-side detailed measurements ──
+      if (hasFrontData) {
+        const frontOk = await saveMeasurementsWithSide('front', frontMeasuredValues, frontSelectedIds)
+        if (!frontOk) throw new Error('Front side save failed')
+        console.log('[NEXT] Front side measurements persisted')
+      }
+
+      if (hasBackData) {
+        const backOk = await saveMeasurementsWithSide('back', backMeasuredValues, backSelectedIds)
+        if (!backOk) throw new Error('Back side save failed')
+        console.log('[NEXT] Back side measurements persisted')
+      }
+
+      // ── Step 2: Session record for analytics ──
+      if (selectedPOArticleId && selectedSize && operator?.id) {
+        const frontQCResult = frontSideComplete && frontQCChecked
+          ? (failedMeasurements.length === 0 && qcPassed ? 'PASS' : 'FAIL') : null
+        const backQCResult = backSideComplete && backQCChecked
+          ? (failedMeasurements.length === 0 && qcPassed ? 'PASS' : 'FAIL') : null
+
+        await window.database.execute(`
+          INSERT INTO measurement_sessions 
+            (purchase_order_article_id, size, article_style, operator_id, 
+             front_side_complete, back_side_complete, 
+             front_qc_result, back_qc_result,
+             completed_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+          ON DUPLICATE KEY UPDATE
+            front_side_complete = VALUES(front_side_complete),
+            back_side_complete = VALUES(back_side_complete),
+            front_qc_result = VALUES(front_qc_result),
+            back_qc_result = VALUES(back_qc_result),
+            completed_at = NOW()
+        `, [
+          selectedPOArticleId,
+          selectedSize,
+          articleStyle,
+          operator.id,
+          frontSideComplete ? 1 : 0,
+          backSideComplete ? 1 : 0,
+          frontQCResult,
+          backQCResult
+        ])
+        console.log('[NEXT] Session record saved')
+      }
+
+      // ── Step 3: Lightweight non-blocking verification (log only, never blocks) ──
+      if (selectedPOArticleId && selectedSize) {
         try {
-          if (attempt > 0) console.log(`[NEXT] Retry attempt ${attempt}/${MAX_RETRIES}...`)
+          const verifyBasic = await window.database.execute(`
+            SELECT COUNT(*) as cnt FROM measurement_results 
+            WHERE purchase_order_article_id = ? AND size = ?
+          `, [selectedPOArticleId, selectedSize]) as any
+          const basicRows = verifyBasic?.[0]?.[0]?.cnt ?? verifyBasic?.[0]?.cnt ?? 0
 
-          // Save front side measurements if complete (uses per-side checked ID snapshot)
-          if (frontSideComplete && Object.keys(frontMeasuredValues).length > 0) {
-            const frontOk = await saveMeasurementsWithSide('front', frontMeasuredValues, frontSelectedIds)
-            if (!frontOk) throw new Error('Front side save failed')
-            console.log('[NEXT] Front side measurements persisted')
-          }
-
-          // Save back side measurements if complete (uses per-side checked ID snapshot)
-          if (backSideComplete && Object.keys(backMeasuredValues).length > 0) {
-            const backOk = await saveMeasurementsWithSide('back', backMeasuredValues, backSelectedIds)
-            if (!backOk) throw new Error('Back side save failed')
-            console.log('[NEXT] Back side measurements persisted')
-          }
-
-          // ── Step 2: Save measurement session record for analytics ──
-          if (selectedPOArticleId && selectedSize && operator?.id) {
-            const frontQCResult = frontSideComplete && frontQCChecked
-              ? (failedMeasurements.length === 0 && qcPassed ? 'PASS' : 'FAIL') : null
-            const backQCResult = backSideComplete && backQCChecked
-              ? (failedMeasurements.length === 0 && qcPassed ? 'PASS' : 'FAIL') : null
-
-            await window.database.execute(`
-              INSERT INTO measurement_sessions 
-                (purchase_order_article_id, size, article_style, operator_id, 
-                 front_side_complete, back_side_complete, 
-                 front_qc_result, back_qc_result,
-                 completed_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
-              ON DUPLICATE KEY UPDATE
-                front_side_complete = VALUES(front_side_complete),
-                back_side_complete = VALUES(back_side_complete),
-                front_qc_result = VALUES(front_qc_result),
-                back_qc_result = VALUES(back_qc_result),
-                completed_at = NOW()
-            `, [
-              selectedPOArticleId,
-              selectedSize,
-              articleStyle,
-              operator.id,
-              frontSideComplete ? 1 : 0,
-              backSideComplete ? 1 : 0,
-              frontQCResult,
-              backQCResult
-            ])
-            console.log('[NEXT] Session record saved')
-          }
-
-          // ── Step 3: Verification — read back from BOTH tables to confirm persistence ──
-          if (selectedPOArticleId && selectedSize) {
-            // Verify measurement_results (backward-compatible table)
-            const verifyBasic = await window.database.execute(`
-              SELECT COUNT(*) as cnt FROM measurement_results 
+          let detailedRows = 0
+          try {
+            const verifyDetailed = await window.database.execute(`
+              SELECT COUNT(*) as cnt FROM measurement_results_detailed 
               WHERE purchase_order_article_id = ? AND size = ?
             `, [selectedPOArticleId, selectedSize]) as any
-            const basicRows = verifyBasic?.[0]?.[0]?.cnt ?? verifyBasic?.[0]?.cnt ?? 0
+            detailedRows = verifyDetailed?.[0]?.[0]?.cnt ?? verifyDetailed?.[0]?.cnt ?? 0
+          } catch { detailedRows = -1 }
 
-            // Verify measurement_results_detailed (primary table)
-            let detailedRows = 0
-            try {
-              const verifyDetailed = await window.database.execute(`
-                SELECT COUNT(*) as cnt FROM measurement_results_detailed 
-                WHERE purchase_order_article_id = ? AND size = ?
-              `, [selectedPOArticleId, selectedSize]) as any
-              detailedRows = verifyDetailed?.[0]?.[0]?.cnt ?? verifyDetailed?.[0]?.cnt ?? 0
-            } catch {
-              // Table may not exist yet — basic table is sufficient
-              detailedRows = -1
-            }
-
-            // Verify measurement_sessions
-            const verifySession = await window.database.execute(`
-              SELECT COUNT(*) as cnt FROM measurement_sessions 
-              WHERE purchase_order_article_id = ? AND size = ?
-            `, [selectedPOArticleId, selectedSize]) as any
-            const sessionRows = verifySession?.[0]?.[0]?.cnt ?? verifySession?.[0]?.cnt ?? 0
-
-            console.log(`[NEXT] Verification: measurement_results=${basicRows}, measurement_results_detailed=${detailedRows}, measurement_sessions=${sessionRows}`)
-
-            const hasCompletedSide = frontSideComplete || backSideComplete
-            if (hasCompletedSide && basicRows === 0) {
-              throw new Error(`Verification failed — 0 rows in measurement_results after save`)
-            }
-            if (hasCompletedSide && sessionRows === 0 && operator?.id) {
-              throw new Error(`Verification failed — 0 rows in measurement_sessions after save`)
-            }
+          console.log(`[NEXT] Verification (non-blocking): measurement_results=${basicRows}, measurement_results_detailed=${detailedRows}`)
+          if (basicRows === 0) {
+            console.warn('[NEXT] ⚠ Post-save verification: 0 rows in measurement_results — data may not have persisted correctly')
           }
-
-          saveSucceeded = true
-          console.log('[NEXT] All data saved and verified successfully')
-        } catch (retryErr) {
-          console.error(`[NEXT] Save attempt ${attempt + 1} failed:`, retryErr)
-          if (attempt === MAX_RETRIES) {
-            throw retryErr // Final attempt failed → propagate
-          }
-          // Brief pause before retry
-          await new Promise(r => setTimeout(r, 500))
+        } catch (verifyErr) {
+          // Verification failure is non-blocking — save already succeeded
+          console.warn('[NEXT] Verification query failed (non-blocking):', verifyErr)
         }
       }
 
-      // ── Step 4: Navigation allowed — reset panel ──
-      console.log('[NEXT] Resetting panel for next article...')
+      console.log('[NEXT] All data saved successfully')
 
-      setShowQCResult(false)
+      // ── Step 4: Reset panel for next article ──
+      resetPanelForNextArticle()
 
-      setSelectedBrandId(null)
-      setSelectedArticleTypeId(null)
-      setSelectedArticleId(null)
-      setSelectedPOId(null)
-      setSelectedPOArticleId(null)
-      setSelectedSize(null)
-      setSelectedColor(null)
-
-      resetMeasurementState()
-      setDisplayUnit('cm')
-
-      setArticleTypes([])
-      setArticles([])
-      setPurchaseOrders([])
-      setPOArticles([])
-      setAvailableSizes([])
-      setJobCardSummary(null)
-
-      setQcPassed(true)
-      setFailedMeasurements([])
-
-      setError(null)
-      console.log('[NEXT] Panel reset complete - ready for next article')
     } catch (err) {
-      console.error('[NEXT] Error during next article transition:', err)
-      setError('Save failed — measurements not confirmed in database. Please try again before proceeding.')
+      // Only show error for actual database write failures (SQL error / IPC failure)
+      console.error('[NEXT] Database write error during save:', err)
+      setError('Failed to save measurements to database. Please try again.')
     } finally {
       setIsSavingNextArticle(false)
     }
+  }
+
+  // ── Full panel reset for next article — clears ALL runtime state ──
+  const resetPanelForNextArticle = () => {
+    console.log('[NEXT] Resetting panel for next article...')
+
+    // Stop any active polling/measurement
+    if (isPollingActive) {
+      setIsPollingActive(false)
+      window.measurement.stop().catch(() => {})
+    }
+
+    setShowQCResult(false)
+
+    setSelectedBrandId(null)
+    setSelectedArticleTypeId(null)
+    setSelectedArticleId(null)
+    setSelectedPOId(null)
+    setSelectedPOArticleId(null)
+    setSelectedSize(null)
+    setSelectedColor(null)
+
+    resetMeasurementState()
+    setDisplayResultUnit('cm')
+
+    setArticleTypes([])
+    setArticles([])
+    setPurchaseOrders([])
+    setPOArticles([])
+    setAvailableSizes([])
+    setJobCardSummary(null)
+
+    setQcPassed(true)
+    setFailedMeasurements([])
+
+    setError(null)
+    console.log('[NEXT] Panel reset complete — ready for next article')
   }
 
   // Check QC for specific side measurements
@@ -1628,22 +1742,27 @@ export function ArticlesList() {
       const valueStr = valuesToCheck[spec.id]
       if (!valueStr) return
 
-      const value = parseFloat(valueStr) // Always in cm
+      const value = parseFloat(valueStr) // Raw cm from camera for selected rows
       const expected = parseFloat(String(spec.expected_value)) || 0
       // Use editable tolerances if available, otherwise spec defaults
       const tols = editableTols[spec.id]
       const tolPlus = tols ? (parseFloat(tols.tol_plus) || parseFloat(String(spec.tol_plus)) || 0) : (parseFloat(String(spec.tol_plus)) || 0)
       const tolMinus = tols ? (parseFloat(tols.tol_minus) || parseFloat(String(spec.tol_minus)) || 0) : (parseFloat(String(spec.tol_minus)) || 0)
 
+      // Convert measured cm to spec unit for comparison (expected/tol are in spec unit)
+      const specUnitIsInch = baseUnit.toLowerCase().includes('inch')
+      const isSelected = selectedMeasurementIds.has(spec.id)
+      const valueInSpecUnit = (isSelected && specUnitIsInch) ? value * CM_TO_INCH : value
+
       const minValid = expected - tolMinus
       const maxValid = expected + tolPlus
 
-      if (value < minValid || value > maxValid) {
+      if (valueInSpecUnit < minValid || valueInSpecUnit > maxValid) {
         failed.push({
           code: spec.code,
           measurement: spec.measurement,
           expected: expected,
-          actual: value
+          actual: valueInSpecUnit
         })
       }
     })
@@ -1691,15 +1810,20 @@ export function ArticlesList() {
           const tolPlus = parseFloat(String(spec.tol_plus)) || 0
           const tolMinus = parseFloat(String(spec.tol_minus)) || 0
 
+          // Convert measured cm to spec unit for comparison
+          const specUnitIsInch = baseUnit.toLowerCase().includes('inch')
+          const isSelected = selectedMeasurementIds.has(spec.id)
+          const valueInSpecUnit = (isSelected && specUnitIsInch) ? value * CM_TO_INCH : value
+
           const minValid = expected - tolMinus
           const maxValid = expected + tolPlus
 
-          if (value < minValid || value > maxValid) {
+          if (valueInSpecUnit < minValid || valueInSpecUnit > maxValid) {
             failed.push({
               code: spec.code,
               measurement: spec.measurement,
               expected: expected,
-              actual: value
+              actual: valueInSpecUnit
             })
           }
         })
@@ -1811,9 +1935,12 @@ export function ArticlesList() {
         const tolPlus = tols ? (parseFloat(tols.tol_plus) || parseFloat(String(spec.tol_plus)) || 0) : (parseFloat(String(spec.tol_plus)) || 0)
         const tolMinus = tols ? (parseFloat(tols.tol_minus) || parseFloat(String(spec.tol_minus)) || 0) : (parseFloat(String(spec.tol_minus)) || 0)
         const expected = parseFloat(String(spec.expected_value)) || 0
+        // Convert measured cm to spec unit for comparison (expected/tol are in spec unit)
+        const specUnitIsInch = baseUnit.toLowerCase().includes('inch')
+        const valueInSpecUnit = specUnitIsInch ? value * CM_TO_INCH : value
         const minValid = expected - tolMinus
         const maxValid = expected + tolPlus
-        const status = (value >= minValid && value <= maxValid) ? 'PASS' : 'FAIL'
+        const status = (valueInSpecUnit >= minValid && valueInSpecUnit <= maxValid) ? 'PASS' : 'FAIL'
 
         // Save to detailed results table with side info + garment_color
         await window.database.execute(`
@@ -1849,9 +1976,11 @@ export function ArticlesList() {
         const tolPlus = tols ? (parseFloat(tols.tol_plus) || parseFloat(String(spec.tol_plus)) || 0) : (parseFloat(String(spec.tol_plus)) || 0)
         const tolMinus = tols ? (parseFloat(tols.tol_minus) || parseFloat(String(spec.tol_minus)) || 0) : (parseFloat(String(spec.tol_minus)) || 0)
         const expected = parseFloat(String(spec.expected_value)) || 0
+        const specUnitIsInch = baseUnit.toLowerCase().includes('inch')
+        const valueInSpecUnit = specUnitIsInch ? value * CM_TO_INCH : value
         const minValid = expected - tolMinus
         const maxValid = expected + tolPlus
-        const status = (value >= minValid && value <= maxValid) ? 'PASS' : 'FAIL'
+        const status = (valueInSpecUnit >= minValid && valueInSpecUnit <= maxValid) ? 'PASS' : 'FAIL'
 
         await window.database.execute(`
           INSERT INTO measurement_results 
@@ -2065,8 +2194,11 @@ export function ArticlesList() {
       }
     }
 
-    // Save before going back
-    await saveMeasurements()
+    // Only attempt save if there are actual measured values
+    const hasAnyMeasured = Object.values(measuredValues).some(v => v && v !== '')
+    if (hasAnyMeasured) {
+      await saveMeasurements()
+    }
 
     // Reset all measurement states
     resetMeasurementState()
@@ -2158,7 +2290,7 @@ export function ArticlesList() {
           COALESCE(m.tol_minus, 0) as tol_minus,
           ms.size,
           ms.value as expected_value,
-          COALESCE(ms.unit, 'cm') as unit,
+          ms.unit as unit,
           a.id as article_id
         FROM articles a
         JOIN measurements m ON m.article_id = a.id AND m.deleted_at IS NULL
@@ -2529,6 +2661,15 @@ export function ArticlesList() {
               <span className="text-[15px] font-bold text-white bg-accent px-3 py-1.5 rounded-lg">
                 {selectedSize || 'No Size'}
               </span>
+
+              {/* Convert Result toggle — converts RESULT column only */}
+              <button
+                onClick={() => setDisplayResultUnit(prev => prev === 'cm' ? 'inch' : 'cm')}
+                className="px-3 py-1.5 text-[11px] font-bold rounded-lg border-2 transition-all active:scale-95 whitespace-nowrap bg-white border-primary/30 text-primary hover:bg-primary/5"
+                title="Toggle RESULT column between CM and INCH"
+              >
+                Result: {displayResultUnit === 'cm' ? 'CM' : 'INCH'}
+              </button>
             </div>
           </div>
           <div className="overflow-y-auto overflow-x-hidden flex-1">
@@ -2560,33 +2701,21 @@ export function ArticlesList() {
                       ) : null}
                     </button>
                   </th>
-                  <th className="px-3 py-4 text-left text-touch-sm font-bold text-primary uppercase tracking-wide w-14">POM</th>
-                  <th className="px-3 py-4 text-left text-touch-sm font-bold text-primary uppercase tracking-wide">Measurement</th>
+                  <th className="px-3 py-4 text-left text-touch-sm font-bold text-primary uppercase tracking-wide w-16">POM</th>
+                  <th className="px-3 py-4 text-left text-touch-sm font-bold text-primary uppercase tracking-wide min-w-[100px]">Measurement</th>
                   <th className="px-3 py-3 text-center text-touch-sm font-bold text-primary uppercase tracking-wide w-19">
                     <div className="flex flex-col items-center leading-tight">
                       <span>Value</span>
-                      <div className="flex items-center gap-0.5 mt-0.5">
-                        <button
-                          onClick={() => setDisplayUnit('cm')}
-                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all ${
-                            displayUnit === 'cm'
-                              ? 'bg-primary text-white shadow-sm'
-                              : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
-                          }`}
-                        >CM</button>
-                        <button
-                          onClick={() => setDisplayUnit('inch')}
-                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all ${
-                            displayUnit === 'inch'
-                              ? 'bg-primary text-white shadow-sm'
-                              : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
-                          }`}
-                        >INCH</button>
-                      </div>
+                      {baseUnit && <span className="text-[9px] font-bold text-slate-400 uppercase">{baseUnit.toUpperCase()}</span>}
                     </div>
                   </th>
                   <th className="px-3 py-4 text-center text-touch-sm font-bold text-primary uppercase tracking-wide w-28">Tol ±</th>
-                  <th className="px-3 py-4 text-center text-touch-sm font-bold text-primary uppercase tracking-wide w-18">Result</th>
+                  <th className="px-3 py-4 text-center text-touch-sm font-bold text-primary uppercase tracking-wide w-18">
+                    <div className="flex flex-col items-center leading-tight">
+                      <span>Result</span>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase">{displayResultUnit === 'inch' ? 'INCH' : 'CM'}</span>
+                    </div>
+                  </th>
                   <th className="px-3 py-4 text-center text-touch-sm font-bold text-primary uppercase tracking-wide w-14">Status</th>
                 </tr>
               </thead>
@@ -2601,7 +2730,7 @@ export function ArticlesList() {
                           ? (selectedMeasurementIds.has(spec.id) ? 'hover:bg-slate-50/80' : 'bg-slate-50/30 opacity-50 border-l-2 border-l-slate-200')
                           : (selectedMeasurementIds.has(spec.id) ? 'bg-success/5' : 'hover:bg-slate-50/80')
                       }`}>
-                        <td className="px-1 py-3 text-center">
+                        <td className="px-1 py-3 text-center align-middle">
                           <button
                             onClick={() => toggleMeasurementSelection(spec.id)}
                             className={`w-7 h-7 rounded-md border-2 flex items-center justify-center transition-all active:scale-90 mx-auto ${
@@ -2617,12 +2746,16 @@ export function ArticlesList() {
                             )}
                           </button>
                         </td>
-                        <td className="px-2 py-3 font-mono text-touch-sm font-bold text-primary">{spec.code}</td>
-                        <td className="px-2 py-3 text-touch-sm text-slate-600 truncate max-w-[120px]" title={spec.measurement}>{spec.measurement}</td>
-                        <td className="px-2 py-3 text-center font-bold text-slate-800 text-touch-base">{toDisplayUnit(parseFloat(String(spec.expected_value)) || 0)}</td>
+                        <td className="px-2 py-3 align-middle">
+                          <div className="font-mono text-touch-sm font-bold text-primary leading-tight break-words max-w-[60px]">{spec.code}</div>
+                        </td>
+                        <td className="px-2 py-3 align-middle">
+                          <div className="text-touch-sm text-slate-600 leading-tight truncate max-w-[120px]" title={spec.measurement}>{spec.measurement}</div>
+                        </td>
+                        <td className="px-2 py-3 text-center align-middle font-bold text-slate-800 text-touch-base">{(parseFloat(String(spec.expected_value)) || 0).toFixed(2)}</td>
 
                         {/* Tol± Column - SINGLE INPUT with touch arrows, applies to BOTH +/- */}
-                        <td className="px-2 py-3 text-center">
+                        <td className="px-2 py-3 text-center align-middle">
                           {measurementComplete || !isPollingActive ? (
                             <div className="inline-flex items-center gap-1 bg-surface-teal rounded-xl p-1">
                               {/* Down Arrow */}
@@ -2670,23 +2803,27 @@ export function ArticlesList() {
                             </div>
                           ) : (
                             <span className="inline-block px-3 py-1.5 bg-surface-teal rounded-lg text-touch-base font-bold text-primary">
-                              ±{tolDisplay(parseFloat(String(spec.tol_plus)) || 0)}
+                              ±{(parseFloat(String(spec.tol_plus)) || 0).toFixed(2)}
                             </span>
                           )}
                         </td>
 
-                        {/* Result - READ ONLY, display-converted from internal cm value */}
-                        <td className="px-2 py-3 text-center">
+                        {/* Result - READ ONLY: selected rows convert cm→displayResultUnit; unselected rows show raw DB value */}
+                        <td className="px-2 py-3 text-center align-middle">
                           <div className={`px-2 py-1.5 rounded text-touch-base font-bold ${measuredValues[spec.id]
                             ? status === 'PASS' ? 'bg-success/10 text-success' : status === 'FAIL' ? 'bg-error/10 text-error' : 'bg-slate-100 text-primary'
                             : 'bg-slate-50 text-slate-300'
                             }`}>
-                            {measuredValues[spec.id] ? toDisplayUnit(parseFloat(measuredValues[spec.id])) : '--'}
+                            {measuredValues[spec.id]
+                              ? (selectedMeasurementIds.has(spec.id)
+                                  ? convertResultForDisplay(parseFloat(measuredValues[spec.id]))
+                                  : parseFloat(measuredValues[spec.id]).toFixed(2))
+                              : '--'}
                           </div>
                         </td>
 
                         {/* Status */}
-                        <td className="px-2 py-3 text-center">
+                        <td className="px-2 py-3 text-center align-middle">
                           {status === 'PASS' && (
                             <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-success/10 text-success">
                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2836,11 +2973,11 @@ export function ArticlesList() {
                 Start QC
               </button>
 
-              {/* Next Article - robust save + verification before navigation */}
+              {/* Next Article — always available; saves only if QC was performed */}
               <button
                 onClick={handleNextArticle}
-                disabled={(!frontSideComplete && !backSideComplete) || isSavingNextArticle}
-                className={`py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${(!frontSideComplete && !backSideComplete) || isSavingNextArticle
+                disabled={isSavingNextArticle}
+                className={`py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${isSavingNextArticle
                   ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                   : 'bg-primary text-white hover:bg-primary-dark shadow-md'
                   }`}

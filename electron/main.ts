@@ -204,6 +204,9 @@ function setupCSP() {
 // Initialize database and create window when app is ready
 app.whenReady().then(async () => {
   try {
+    // Clear Chromium cache on startup to prevent corruption-related blank screens
+    await session.defaultSession.clearCache()
+
     // Set up Content Security Policy
     setupCSP()
 
