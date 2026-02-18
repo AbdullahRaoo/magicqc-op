@@ -32,3 +32,4 @@ export default {
 =======
 # Operator
 >>>>>>> 21a310908108a16305e8f438adebf82c26b14a8f
+"# magicoperator" 
