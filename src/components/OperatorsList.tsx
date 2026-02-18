@@ -14,9 +14,7 @@ export function OperatorsList() {
     setLoading(true)
     setError(null)
     try {
-      const result = await window.database.query<Operator>(
-        'SELECT * FROM operators ORDER BY full_name'
-      )
+      const result = await window.api.getOperators()
 
       if (result.success && result.data) {
         setOperators(result.data)
@@ -89,8 +87,8 @@ export function OperatorsList() {
                   </tr>
                 ) : (
                   operators.map((operator, index) => (
-                    <tr 
-                      key={operator.id} 
+                    <tr
+                      key={operator.id}
                       className="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-indigo-50/50 dark:hover:from-gray-700/50 dark:hover:to-gray-700/50 transition-all duration-200 group text-start"
                       style={{ animationDelay: `${index * 50}ms` }}
                     >

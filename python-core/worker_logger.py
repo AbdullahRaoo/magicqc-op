@@ -16,9 +16,16 @@ import logging
 from logging.handlers import RotatingFileHandler
 
 # ---------------------------------------------------------------------------
-# Log directory lives next to this file
+# Log directory lives at the PROJECT ROOT (parent of python-core/)
+# Frozen (PyInstaller): sys.executable is the .exe sitting in PROJECT_ROOT
+# Dev:                   this file is at PROJECT_ROOT/python-core/worker_logger.py
 # ---------------------------------------------------------------------------
-LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+if getattr(sys, 'frozen', False):
+    PROJECT_ROOT = os.path.dirname(sys.executable)
+else:
+    _CORE_DIR = os.path.dirname(os.path.abspath(__file__))
+    PROJECT_ROOT = os.path.dirname(_CORE_DIR)
+LOG_DIR = os.path.join(PROJECT_ROOT, 'logs')
 os.makedirs(LOG_DIR, exist_ok=True)
 
 
@@ -57,7 +64,7 @@ def setup_file_logging(name: str = 'worker', max_bytes: int = 5 * 1024 * 1024,
     Parameters
     ----------
     name : str
-        Base name for the log file (e.g. 'measurement' → logs/measurement.log).
+        Base name for the log file (e.g. 'measurement' -> logs/measurement.log).
     max_bytes : int
         Maximum size of each log file before rotation (default 5 MB).
     backup_count : int
@@ -87,7 +94,7 @@ def setup_file_logging(name: str = 'worker', max_bytes: int = 5 * 1024 * 1024,
     sys.stderr = _LoggerWriter(logger, logging.ERROR)
 
     logger.info('='*60)
-    logger.info(f'Logger initialised  –  {name}  →  {log_path}')
+    logger.info(f'Logger initialised  -  {name}  ->  {log_path}')
     logger.info('='*60)
 
     return logger

@@ -30,3 +30,14 @@ dist-electron
 
 # Build output
 release
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Runtime directories (created at runtime, not versioned)
+temp_measure/
+temp_annotations/
+measurement_results/
+storage/

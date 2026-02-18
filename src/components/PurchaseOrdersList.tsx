@@ -15,27 +15,11 @@ export function PurchaseOrdersList() {
     setLoading(true)
     setError(null)
     try {
-      let sql = `
-        SELECT 
-          po.*,
-          b.name as brand_name,
-          b.description as brand_description
-        FROM purchase_orders po
-        LEFT JOIN brands b ON po.brand_id = b.id
-      `
-      const params: any[] = []
-
-      if (selectedStatus !== 'All') {
-        sql += ' WHERE po.status = ?'
-        params.push(selectedStatus)
-      }
-
-      sql += ' ORDER BY po.date DESC, po.po_number DESC LIMIT 50'
-
-      const result = await window.database.query<PurchaseOrderWithRelations>(sql, params)
+      const statusFilter = selectedStatus !== 'All' ? selectedStatus : undefined
+      const result = await window.api.getAllPurchaseOrders(statusFilter)
 
       if (result.success && result.data) {
-        setPurchaseOrders(result.data)
+        setPurchaseOrders(result.data as any)
       } else {
         setError(result.error || 'Failed to fetch purchase orders')
       }
@@ -77,11 +61,10 @@ export function PurchaseOrdersList() {
           <button
             key={status}
             onClick={() => setSelectedStatus(status)}
-            className={`relative px-6 py-2.5 rounded-xl font-semibold text-sm transition-all duration-300 transform hover:scale-105 active:scale-95 ${
-              selectedStatus === status
-                ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/40 scale-105'
-                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-md'
-            }`}
+            className={`relative px-6 py-2.5 rounded-xl font-semibold text-sm transition-all duration-300 transform hover:scale-105 active:scale-95 ${selectedStatus === status
+              ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/40 scale-105'
+              : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-md'
+              }`}
           >
             {status}
             {selectedStatus === status && (
@@ -140,8 +123,8 @@ export function PurchaseOrdersList() {
                   </tr>
                 ) : (
                   purchaseOrders.map((po, index) => (
-                    <tr 
-                      key={po.id} 
+                    <tr
+                      key={po.id}
                       className="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-indigo-50/50 dark:hover:from-gray-700/50 dark:hover:to-gray-700/50 transition-all duration-200 group text-start"
                       style={{ animationDelay: `${index * 50}ms` }}
                     >
@@ -152,7 +135,7 @@ export function PurchaseOrdersList() {
                         <span className="text-sm text-gray-700 dark:text-gray-300">{new Date(po.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{po.brand_name || 'N/A'}</span>
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{(po as any).brand?.name || (po as any).brand_name || 'N/A'}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">

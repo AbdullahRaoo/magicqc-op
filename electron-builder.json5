@@ -11,6 +11,23 @@
     "dist",
     "dist-electron"
   ],
+  "extraResources": [
+    {
+      "from": "python-core",
+      "to": "python-core",
+      "filter": ["**/*.py", "!__pycache__/**"]
+    },
+    {
+      "from": ".",
+      "to": ".",
+      "filter": [
+        "camera_calibration.json",
+        "measurement_config.json",
+        "registration_config.json",
+        ".env.example"
+      ]
+    }
+  ],
   "mac": {
     "target": [
       "dmg"

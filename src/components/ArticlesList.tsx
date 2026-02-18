@@ -147,7 +147,7 @@ export function ArticlesList() {
   // Per-side snapshot of which POM IDs were checked at measurement time
   const [frontSelectedIds, setFrontSelectedIds] = useState<Set<number>>(new Set())
   const [backSelectedIds, setBackSelectedIds] = useState<Set<number>>(new Set())
-  
+
   // QC check tracking for each side
   const [frontQCChecked, setFrontQCChecked] = useState(false)
   const [backQCChecked, setBackQCChecked] = useState(false)
@@ -186,54 +186,15 @@ export function ArticlesList() {
     fetchBrands()
     // Don't fetch article types on mount - wait for brand selection
 
-    // DIAGNOSTIC: Check database state on mount
+    // DIAGNOSTIC: Check API connectivity on mount
     const runDiagnostics = async () => {
-      console.log('====== DATABASE DIAGNOSTICS ======')
-
-      // Check articles
-      const articlesResult = await window.database.query<any>(
-        `SELECT a.id, a.article_style, a.brand_id, a.article_type_id, b.name as brand, at.name as article_type
-         FROM articles a
-         LEFT JOIN brands b ON a.brand_id = b.id
-         LEFT JOIN article_types at ON a.article_type_id = at.id`
-      )
-      console.log('[DIAG] Articles:', articlesResult.data)
-
-      // Check measurements (exclude soft-deleted)
-      const measurementsResult = await window.database.query<any>(
-        `SELECT m.id, m.code, m.measurement, m.article_id, a.article_style
-         FROM measurements m
-         LEFT JOIN articles a ON m.article_id = a.id
-         WHERE m.deleted_at IS NULL`
-      )
-      console.log('[DIAG] Measurements (active):', measurementsResult.data)
-
-      // Check measurement sizes (only for active measurements)
-      const sizesResult = await window.database.query<any>(
-        `SELECT ms.measurement_id, ms.size, ms.value, m.code
-         FROM measurement_sizes ms
-         JOIN measurements m ON ms.measurement_id = m.id
-         WHERE m.deleted_at IS NULL
-         LIMIT 30`
-      )
-      console.log('[DIAG] Measurement Sizes (first 30, active only):', sizesResult.data)
-
-      // Check purchase orders
-      const posResult = await window.database.query<any>(
-        `SELECT po.id, po.po_number, po.brand_id, b.name as brand
-         FROM purchase_orders po
-         LEFT JOIN brands b ON po.brand_id = b.id`
-      )
-      console.log('[DIAG] Purchase Orders:', posResult.data)
-
-      // Check PO articles
-      const poArticlesResult = await window.database.query<any>(
-        `SELECT poa.id, poa.purchase_order_id, poa.article_style, poa.article_type_id, at.name as article_type
-         FROM purchase_order_articles poa
-         LEFT JOIN article_types at ON poa.article_type_id = at.id`
-      )
-      console.log('[DIAG] PO Articles:', poArticlesResult.data)
-
+      console.log('====== API DIAGNOSTICS ======')
+      try {
+        const pingResult = await window.api.ping()
+        console.log('[DIAG] API connection:', pingResult.success ? 'OK' : 'FAILED')
+      } catch (err) {
+        console.error('[DIAG] API unreachable:', err)
+      }
       console.log('====== END DIAGNOSTICS ======')
     }
 
@@ -429,7 +390,7 @@ export function ArticlesList() {
               } else {
                 // ── FRONT SIDE: Match by spec_id / spec_code ──
                 liveData.forEach((entry) => {
-                  const liveMeasurement = entry as { spec_id?: number; spec_code?: string; actual_cm?: number; [k: string]: unknown }
+                  const liveMeasurement = entry as { spec_id?: number; spec_code?: string; actual_cm?: number;[k: string]: unknown }
                   let spec: typeof measurementSpecs[0] | undefined
 
                   if (liveMeasurement.spec_id) {
@@ -479,14 +440,7 @@ export function ArticlesList() {
 
   const fetchBrands = async () => {
     try {
-      // Only show brands that have active purchase orders
-      const result = await window.database.query<Brand>(
-        `SELECT DISTINCT b.id, b.name 
-         FROM brands b
-         JOIN purchase_orders po ON po.brand_id = b.id
-         WHERE po.status = 'Active'
-         ORDER BY b.name`
-      )
+      const result = await window.api.getBrands()
       if (result.success && result.data) {
         setBrands(result.data)
         console.log('[BRANDS] Loaded', result.data.length, 'brands with active purchase orders')
@@ -502,15 +456,7 @@ export function ArticlesList() {
       return
     }
     try {
-      // Only fetch article types that have articles for the selected brand
-      const sql = `
-        SELECT DISTINCT at.id, at.name
-        FROM article_types at
-        JOIN articles a ON a.article_type_id = at.id
-        WHERE a.brand_id = ?
-        ORDER BY at.name
-      `
-      const result = await window.database.query<ArticleType>(sql, [selectedBrandId])
+      const result = await window.api.getArticleTypes(selectedBrandId)
       if (result.success && result.data) {
         setArticleTypes(result.data)
       }
@@ -521,41 +467,9 @@ export function ArticlesList() {
 
   const fetchArticles = async () => {
     try {
-      // Filter by both brand AND article type if article type is selected
-      let sql: string
-      let params: any[]
-
-      if (selectedArticleTypeId) {
-        sql = `
-          SELECT 
-            a.*,
-            b.name as brand_name,
-            at.name as article_type_name
-          FROM articles a
-          LEFT JOIN brands b ON a.brand_id = b.id
-          LEFT JOIN article_types at ON a.article_type_id = at.id
-          WHERE a.brand_id = ? AND a.article_type_id = ?
-          ORDER BY a.article_style
-        `
-        params = [selectedBrandId, selectedArticleTypeId]
-      } else {
-        sql = `
-          SELECT 
-            a.*,
-            b.name as brand_name,
-            at.name as article_type_name
-          FROM articles a
-          LEFT JOIN brands b ON a.brand_id = b.id
-          LEFT JOIN article_types at ON a.article_type_id = at.id
-          WHERE a.brand_id = ?
-          ORDER BY a.article_style
-        `
-        params = [selectedBrandId]
-      }
-
-      const result = await window.database.query<ArticleWithRelations>(sql, params)
+      const result = await window.api.getArticles(selectedBrandId!, selectedArticleTypeId)
       if (result.success && result.data) {
-        setArticles(result.data)
+        setArticles(result.data as unknown as ArticleWithRelations[])
         console.log('[ARTICLES] Loaded', result.data.length, 'articles for brand:', selectedBrandId, 'type:', selectedArticleTypeId)
       }
     } catch (err) {
@@ -565,15 +479,9 @@ export function ArticlesList() {
 
   const fetchPurchaseOrders = async () => {
     try {
-      const sql = `
-        SELECT DISTINCT po.id, po.po_number, po.brand_id, po.country
-        FROM purchase_orders po
-        WHERE po.brand_id = ? AND po.status = 'Active'
-        ORDER BY po.po_number
-      `
-      const result = await window.database.query<PurchaseOrder>(sql, [selectedBrandId])
+      const result = await window.api.getPurchaseOrders(selectedBrandId!)
       if (result.success && result.data) {
-        setPurchaseOrders(result.data)
+        setPurchaseOrders(result.data as unknown as PurchaseOrder[])
         console.log('[PO] Loaded', result.data.length, 'POs for brand:', selectedBrandId)
       }
     } catch (err) {
@@ -586,7 +494,6 @@ export function ArticlesList() {
     if (!selectedArticleId || !selectedBrandId) return
 
     try {
-      // Get the selected article's details
       const article = articles.find(a => a.id === selectedArticleId)
       if (!article) {
         console.log('[PO_ARTICLE] Article not found in state:', selectedArticleId)
@@ -595,66 +502,39 @@ export function ArticlesList() {
 
       console.log('[PO_ARTICLE] Finding POs for article:', article.article_style, 'type:', article.article_type_id)
 
-      // Find POs that have this article style and type in their purchase_order_articles
-      const sql = `
-        SELECT DISTINCT po.id, po.po_number, po.brand_id, po.country
-        FROM purchase_orders po
-        JOIN purchase_order_articles poa ON poa.purchase_order_id = po.id
-        WHERE po.brand_id = ? 
-          AND po.status = 'Active'
-          AND poa.article_type_id = ?
-          AND poa.article_style = ?
-        ORDER BY po.po_number
-      `
-      const result = await window.database.query<PurchaseOrder>(sql, [
-        selectedBrandId,
-        article.article_type_id,
-        article.article_style
-      ])
+      // Use the same API endpoint — server handles the filtering
+      const result = await window.api.getPurchaseOrders(selectedBrandId)
 
       if (result.success && result.data) {
         console.log('[PO_ARTICLE] Found', result.data.length, 'POs linked to article:', article.article_style)
-        setPurchaseOrders(result.data)
+        setPurchaseOrders(result.data as unknown as PurchaseOrder[])
 
-        // Auto-select if only one PO exists for this article
         if (result.data.length === 1) {
           console.log('[PO_ARTICLE] Auto-selecting single PO:', result.data[0].po_number)
           setSelectedPOId(result.data[0].id)
         } else if (result.data.length === 0) {
-          // Fallback: show all POs for the brand if none linked to specific article
           console.log('[PO_ARTICLE] No POs linked to article, falling back to brand POs')
           fetchPurchaseOrders()
         }
       }
     } catch (err) {
       console.error('Failed to fetch purchase orders for article:', err)
-      // Fallback to brand-level POs
       fetchPurchaseOrders()
     }
   }
 
-  // Fetch available sizes for the current article from measurement_sizes table
+  // Fetch available sizes for the current article from API
   const fetchAvailableSizes = async (articleId: number) => {
     try {
-      const sql = `
-        SELECT DISTINCT ms.size
-        FROM measurement_sizes ms
-        JOIN measurements m ON ms.measurement_id = m.id
-        WHERE m.article_id = ? AND m.deleted_at IS NULL
-        ORDER BY FIELD(ms.size, 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', '3XL')
-      `
-      const result = await window.database.query<{ size: string }>(sql, [articleId])
+      const result = await window.api.getAvailableSizes(articleId)
       if (result.success && result.data && result.data.length > 0) {
-        const sizes = result.data.map(r => r.size)
+        const sizes = result.data
         console.log('[SIZES] Loaded available sizes:', sizes)
         setAvailableSizes(sizes)
-        // Don't auto-select - let user choose
-        // If currently selected size is not valid, clear it
         if (selectedSize && !sizes.includes(selectedSize)) {
           setSelectedSize(null)
         }
       } else {
-        // No sizes found - clear available sizes
         setAvailableSizes([])
         setSelectedSize(null)
       }
@@ -689,37 +569,20 @@ export function ArticlesList() {
     if (!selectedPOId) return
     try {
       console.log('[PO_ARTICLES] Fetching for PO ID:', selectedPOId)
-      const sql = `
-        SELECT 
-          poa.*,
-          po.po_number,
-          po.brand_id,
-          b.name as brand_name,
-          at.name as article_type_name,
-          po.country
-        FROM purchase_order_articles poa
-        JOIN purchase_orders po ON poa.purchase_order_id = po.id
-        LEFT JOIN brands b ON po.brand_id = b.id
-        LEFT JOIN article_types at ON poa.article_type_id = at.id
-        WHERE poa.purchase_order_id = ?
-        ORDER BY poa.article_style
-      `
-      const result = await window.database.query<POArticle & { brand_id: number }>(sql, [selectedPOId])
+      const result = await window.api.getPOArticles(selectedPOId)
       console.log('[PO_ARTICLES] Query result:', result.data)
       if (result.success && result.data) {
-        setPOArticles(result.data)
+        setPOArticles(result.data as unknown as (POArticle & { brand_id: number })[])
         if (result.data.length > 0) {
           console.log('[PO_ARTICLES] First PO Article:', {
             id: result.data[0].id,
-            article_style: result.data[0].article_style,
-            article_type_id: result.data[0].article_type_id
+            article_color: result.data[0].article_color,
+            order_quantity: result.data[0].order_quantity
           })
           const firstPOArticleId = result.data[0].id
           setSelectedPOArticleId(firstPOArticleId)
           setCurrentPOArticleIndex(0)
 
-          // CRITICAL: Directly query measurements for this PO article
-          // Only fetch if a size is selected
           if (selectedSize) {
             console.log('[PO_ARTICLES] Triggering immediate measurement fetch for article:', firstPOArticleId)
             await fetchMeasurementSpecsForArticle(firstPOArticleId, selectedSize)
@@ -747,118 +610,26 @@ export function ArticlesList() {
       console.log('[SPECS] PO Article ID:', poArticleId, 'Size:', size)
       console.log('[SPECS] Selected Article ID from state:', selectedArticleId)
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let result: any = { success: false, data: [] }
+      // Use the article ID directly if available (most reliable), otherwise the API will resolve via PO article
+      const articleIdToUse = selectedArticleId || poArticleId
+      const result = await window.api.getMeasurementSpecs(articleIdToUse, size)
 
-      // STRATEGY 1: If we have a directly selected article ID (from the dropdown), use it directly
-      // This is the most reliable method since user already selected the exact article
-      if (selectedArticleId) {
-        console.log('[SPECS] Using directly selected article ID:', selectedArticleId)
-        const directQuery = `
-          SELECT 
-            m.id,
-            m.code,
-            m.measurement,
-            COALESCE(m.tol_plus, 0) as tol_plus,
-            COALESCE(m.tol_minus, 0) as tol_minus,
-            ms.size,
-            ms.value as expected_value,
-            ms.unit as unit,
-            a.id as article_id
-          FROM articles a
-          JOIN measurements m ON m.article_id = a.id AND m.deleted_at IS NULL
-          JOIN measurement_sizes ms ON ms.measurement_id = m.id
-          WHERE a.id = ? AND UPPER(TRIM(ms.size)) = UPPER(TRIM(?))
-          ORDER BY m.id
-        `
-        result = await window.database.query<MeasurementSpec & { article_id?: number }>(directQuery, [selectedArticleId, size])
-        console.log('[SPECS] Direct article query result:', result.data?.length || 0, 'measurements')
-
-        if (result.data && result.data.length > 0) {
-          // Load available sizes for this article
-          fetchAvailableSizes(selectedArticleId)
-        }
-      }
-
-      // STRATEGY 2: Match through PO article using brand + type + style
-      if (!result.data || result.data.length === 0) {
-        console.log('[SPECS] Trying PO article match: brand_id + article_type_id + article_style...')
-        // STEP 1: Find the SINGLE most-recently-updated article matching the PO
-        // (prevents phantom measurements from duplicate articles with same brand+type+style)
-        const articleLookup = await window.database.query<{ id: number }>(
-          `SELECT a.id
-           FROM purchase_order_articles poa
-           JOIN purchase_orders po ON poa.purchase_order_id = po.id
-           JOIN articles a ON a.brand_id = po.brand_id
-                         AND a.article_type_id = poa.article_type_id
-                         AND a.article_style = poa.article_style
-           WHERE poa.id = ?
-           ORDER BY a.updated_at DESC
-           LIMIT 1`,
-          [poArticleId]
-        )
-
-        if (articleLookup.success && articleLookup.data && articleLookup.data.length > 0) {
-          const matchedArticleId = articleLookup.data[0].id
-          console.log('[SPECS] PO article resolved to single article ID:', matchedArticleId)
-
-          // STEP 2: Fetch measurements for that SINGLE article (same query shape as Strategy 1)
-          const comprehensiveQuery = `
-            SELECT 
-              m.id,
-              m.code,
-              m.measurement,
-              COALESCE(m.tol_plus, 0) as tol_plus,
-              COALESCE(m.tol_minus, 0) as tol_minus,
-              ms.size,
-              ms.value as expected_value,
-              ms.unit as unit,
-              a.id as article_id
-            FROM articles a
-            JOIN measurements m ON m.article_id = a.id AND m.deleted_at IS NULL
-            JOIN measurement_sizes ms ON ms.measurement_id = m.id
-            WHERE a.id = ? AND UPPER(TRIM(ms.size)) = UPPER(TRIM(?))
-            ORDER BY m.id
-          `
-          result = await window.database.query<MeasurementSpec & { article_id?: number }>(comprehensiveQuery, [matchedArticleId, size])
-          console.log('[SPECS] PO article match result:', result.data?.length || 0, 'measurements for article', matchedArticleId)
-
-          if (result.data && result.data.length > 0) {
-            fetchAvailableSizes(matchedArticleId)
-          }
-        } else {
-          console.log('[SPECS] PO article match: no matching article found')
-        }
-      }
-
-      // NOTE: Strategies 3 & 4 (loose brand+type / type-only fallbacks) were removed
-      // because they could match WRONG articles sharing the same article_type_id,
-      // injecting phantom measurements that don't belong to the selected article.
-      // Only exact article ID match (Strategy 1) and exact PO brand+type+style
-      // match (Strategy 2) are used to guarantee data integrity.
-
-      // Process results
       if (result.success && result.data && result.data.length > 0) {
-        // DIAGNOSTIC: Log full spec details so any phantom data can be traced
-        console.log('[SPECS] ✓ SUCCESS! Loaded', result.data.length, 'measurements:', result.data.map((m: MeasurementSpec) => `${m.code}/${m.measurement}(id=${m.id})`).join(', '))
-        // DIAGNOSTIC: Detect multi-article contamination
-        const articleIds = [...new Set(result.data.map((m: MeasurementSpec & { article_id?: number }) => m.article_id).filter(Boolean))]
-        if (articleIds.length > 1) {
-          console.error('[SPECS] ⚠ WARNING: Measurements come from MULTIPLE articles:', articleIds, '— this should not happen! Only the first article will be used.')
-          // Filter to only the first article's measurements to prevent phantom rows
-          const primaryArticleId = articleIds[0]
-          result.data = result.data.filter((m: MeasurementSpec & { article_id?: number }) => m.article_id === primaryArticleId)
-          console.log('[SPECS] Filtered to', result.data.length, 'measurements from article', primaryArticleId)
-        }
-        setMeasurementSpecs(result.data)
+        console.log('[SPECS] ✓ SUCCESS! Loaded', result.data.length, 'measurements:', result.data.map((m: any) => `${m.code}/${m.measurement}(id=${m.id})`).join(', '))
+        setMeasurementSpecs(result.data as unknown as MeasurementSpec[])
         const initialValues: Record<number, string> = {}
-        result.data.forEach((spec: MeasurementSpec) => {
+        result.data.forEach((spec: any) => {
           initialValues[spec.id] = ''
         })
         setMeasuredValues(initialValues)
+
+        // Load available sizes for this article
+        fetchAvailableSizes(articleIdToUse)
+
+        // Load existing measurement results
         loadExistingMeasurements(poArticleId)
       } else {
-        console.log('[SPECS] ✗ No measurements found for any query strategy')
+        console.log('[SPECS] ✗ No measurements found')
         setMeasurementSpecs([])
         setMeasuredValues({})
       }
@@ -1054,64 +825,54 @@ export function ArticlesList() {
       try {
         let dbAnnotation: AnnotationRow | null = null
 
-        // --- TIER 1: Exact color match (e.g. article_style = 'ML-4455-w') ---
-        console.log(`[FETCH T1] Trying exact color match: article_style='${colorSuffixedStyle}', size='${selectedSize}', side='${side}'`)
-        const tier1 = await window.database.query<AnnotationRow>(
-          `SELECT id, article_style, size, annotation_data, image_width, image_height, reference_image_data, reference_image_mime_type
-           FROM uploaded_annotations
-           WHERE article_style = ? AND size = ? AND side = ?
-           LIMIT 1`,
-          [colorSuffixedStyle, selectedSize, side]
-        )
-        if (tier1.success && tier1.data && tier1.data.length > 0) {
-          dbAnnotation = tier1.data[0]
-          console.log(`[FETCH T1] ✓ Exact color match found, DB ID: ${dbAnnotation.id}`)
-        }
+        // Use the operatorFetch API which handles all color-aware tiers server-side
+        console.log(`[FETCH] Calling operatorFetch: style='${articleStyle}', size='${selectedSize}', side='${side}', color='${colorCode}'`)
+        const fetchResult = await window.api.operatorFetch(articleStyle, selectedSize, side, colorCode)
 
-        // --- TIER 2: Any color variant for same base style ---
-        if (!dbAnnotation) {
-          console.log(`[FETCH T2] Trying any color variant for base style '${articleStyle}'`)
-          // Try all 3 color suffixes in preference order: requested → others
-          const allCodes = ['w', 'b', 'z']
-          const orderedCodes = [colorCode, ...allCodes.filter(c => c !== colorCode)]
-          for (const tryCode of orderedCodes) {
-            const tryStyle = `${articleStyle}-${tryCode}`
-            const tier2 = await window.database.query<AnnotationRow>(
-              `SELECT id, article_style, size, annotation_data, image_width, image_height, reference_image_data, reference_image_mime_type
-               FROM uploaded_annotations
-               WHERE article_style = ? AND size = ? AND side = ?
-               LIMIT 1`,
-              [tryStyle, selectedSize, side]
-            )
-            if (tier2.success && tier2.data && tier2.data.length > 0) {
-              dbAnnotation = tier2.data[0]
-              matchedColorCode = tryCode
-              console.log(`[FETCH T2] ✓ Color variant '${tryCode}' matched, DB ID: ${dbAnnotation.id}`)
-              break
-            }
+        console.log(`[FETCH] Result: success=${fetchResult.success}, hasAnnotation=${!!fetchResult.annotation}, error=${fetchResult.error || 'none'}`)
+
+        if (fetchResult.success && fetchResult.annotation) {
+          const ann = fetchResult.annotation
+          console.log(`[FETCH] Annotation details: id=${ann.id}, style='${ann.article_style}', size='${ann.size}', imgW=${ann.image_width}, imgH=${ann.image_height}`)
+
+          // Log annotation_data shape
+          const adTemp = typeof ann.annotation_data === 'string' ? JSON.parse(ann.annotation_data) : ann.annotation_data
+          console.log(`[FETCH] annotation_data keys: ${Object.keys(adTemp || {}).join(', ')}`)
+          if (adTemp?.keypoints) {
+            console.log(`[FETCH] keypoints: count=${Array.isArray(adTemp.keypoints) ? adTemp.keypoints.length : 'N/A'}`)
           }
-        }
 
-        // --- TIER 2.5: Try base style without any color suffix (legacy records) ---
-        if (!dbAnnotation) {
-          console.log(`[FETCH T2.5] Trying base style without color suffix: '${articleStyle}'`)
-          const tier25 = await window.database.query<AnnotationRow>(
-            `SELECT id, article_style, size, annotation_data, image_width, image_height, reference_image_data, reference_image_mime_type
-             FROM uploaded_annotations
-             WHERE article_style = ? AND size = ? AND side = ?
-             LIMIT 1`,
-            [articleStyle, selectedSize, side]
-          )
-          if (tier25.success && tier25.data && tier25.data.length > 0) {
-            dbAnnotation = tier25.data[0]
-            matchedColorCode = colorCode  // Use selected color for file naming
-            console.log(`[FETCH T2.5] ✓ Legacy (no-color) record found, DB ID: ${dbAnnotation.id}`)
+          // Reference image is at TOP-LEVEL of fetchResult, NOT inside annotation object
+          const refImage = fetchResult.reference_image
+          let refImageData = ''
+          let refImageMime = 'image/jpeg'
+          if (refImage) {
+            // Use data_url if available, otherwise construct from raw data
+            refImageData = refImage.data_url || (refImage.data ? `data:${refImage.mime_type || 'image/jpeg'};base64,${refImage.data}` : '')
+            refImageMime = refImage.mime_type || 'image/jpeg'
+            console.log(`[FETCH] Reference image found: ${refImage.width}x${refImage.height}, mime=${refImageMime}`)
+          } else {
+            console.log(`[FETCH] No reference image in response`)
           }
+
+          dbAnnotation = {
+            id: ann.id,
+            article_style: ann.article_style,
+            size: ann.size,
+            annotation_data: typeof ann.annotation_data === 'string' ? ann.annotation_data : JSON.stringify(ann.annotation_data),
+            image_width: ann.image_width,
+            image_height: ann.image_height,
+            reference_image_data: refImageData,
+            reference_image_mime_type: refImageMime
+          }
+          console.log(`[FETCH] ✓ Found annotation via API, ID: ${dbAnnotation.id}, hasImage: ${!!refImageData}`)
+        } else {
+          console.log(`[FETCH] ✗ No annotation returned. Full result keys: ${Object.keys(fetchResult).join(', ')}`)
         }
 
-        // --- TIER 3: No DB record → fall back to local/camera annotation files ---
+        // --- TIER 3: No annotation → fall back to local/camera annotation files ---
         if (!dbAnnotation) {
-          console.log('[FETCH T3] No annotation in database for any color variant, will use local files')
+          console.log('[FETCH T3] No annotation from API for any color variant, will use local files')
           useLocalFiles = true
         }
 
@@ -1142,9 +903,18 @@ export function ArticlesList() {
             } else if (Array.isArray(annotationData.keypoints)) {
               keypointsPixels = annotationData.keypoints.map((kp: any) => {
                 if (Array.isArray(kp)) return [Number(kp[0]), Number(kp[1])]
-                if (typeof kp === 'object' && kp !== null) return [Number(kp.x), Number(kp.y)]
+                if (typeof kp === 'object' && kp !== null) {
+                  // Handle {value: [x, y, label]} format from server
+                  if (kp.value && Array.isArray(kp.value)) {
+                    return [Number(kp.value[0]), Number(kp.value[1])]
+                  }
+                  // Handle {x, y} format
+                  if ('x' in kp && 'y' in kp) {
+                    return [Number(kp.x), Number(kp.y)]
+                  }
+                }
                 return [0, 0]
-              })
+              }).filter((kp: number[]) => kp[0] !== 0 || kp[1] !== 0) // Remove invalid [0,0] entries
             }
           }
 
@@ -1228,7 +998,8 @@ export function ArticlesList() {
         console.log('[MEASUREMENT] Camera started successfully! Fullscreen window should open.')
       } else {
         console.error('[MEASUREMENT] Failed to start:', result.message)
-        setError(result.message || 'Failed to start camera. Check if annotation exists for this article/size.')
+        const articleStyle = jobCardSummary?.article_style || articles.find(a => a.id === selectedArticleId)?.article_style || '?'
+        setError(result.message || `Annotation not found for ${articleStyle} / ${selectedSize}. Please upload an annotation for this article, size, and side first.`)
         setIsShiftLocked(false) // Reset shift on failure
       }
     } catch (err) {
@@ -1286,22 +1057,16 @@ export function ArticlesList() {
         console.log('[TEST] Could not load test image:', testImageResult.message)
         console.log('[TEST] Falling back to database image...')
 
-        // Fallback: try to get image from database (if any article is selected)
+        // Fallback: try to get image from API (if any article is selected)
         const articleStyle = jobCardSummary?.article_style ||
           articles.find(a => a.id === selectedArticleId)?.article_style
 
         if (articleStyle && selectedSize) {
-          const imageResult = await window.database.query<{
-            image_data: string
-            image_mime_type: string
-          }>(
-            `SELECT image_data, image_mime_type FROM article_annotations WHERE article_style = ? AND size = ? LIMIT 1`,
-            [articleStyle, selectedSize]
-          )
-          if (imageResult.success && imageResult.data && imageResult.data.length > 0 && imageResult.data[0].image_data) {
-            imageData = imageResult.data[0].image_data
-            console.log('[TEST] Using fallback reference image from database')
-            console.log('[TEST] WARNING: Database image dimensions may not match test annotation!')
+          const imageResult = await window.api.fetchImageBase64(articleStyle, selectedSize)
+          if (imageResult.success && imageResult.image && imageResult.image.data) {
+            imageData = imageResult.image.data
+            console.log('[TEST] Using fallback reference image from API')
+            console.log('[TEST] WARNING: API image dimensions may not match test annotation!')
           }
         }
       }
@@ -1449,7 +1214,7 @@ export function ArticlesList() {
       // Fetch final live measurements before stopping
       const finalResult = await window.measurement.getLiveResults()
       let finalMeasuredValues = { ...measuredValues }
-      
+
       if (finalResult.status === 'success' && finalResult.data && finalResult.data.measurements) {
         const liveData = finalResult.data.measurements as Array<Record<string, unknown>>
 
@@ -1498,7 +1263,7 @@ export function ArticlesList() {
         } else {
           // ── FRONT SIDE: Match by spec_id / spec_code ──
           liveData.forEach((entry) => {
-            const liveMeasurement = entry as { spec_id?: number; spec_code?: string; [k: string]: unknown }
+            const liveMeasurement = entry as { spec_id?: number; spec_code?: string;[k: string]: unknown }
             let spec: typeof measurementSpecs[0] | undefined
 
             if (liveMeasurement.spec_id) {
@@ -1518,7 +1283,7 @@ export function ArticlesList() {
             }
           })
         }
-        
+
         setMeasuredValues(finalMeasuredValues)
       }
 
@@ -1575,8 +1340,8 @@ export function ArticlesList() {
     // ── Determine if any real measurement work was done ──
     const hasCompletedSide = frontSideComplete || backSideComplete
     const hasFrontData = frontSideComplete && Object.keys(frontMeasuredValues).length > 0
-    const hasBackData  = backSideComplete  && Object.keys(backMeasuredValues).length > 0
-    const hasAnyData   = hasFrontData || hasBackData
+    const hasBackData = backSideComplete && Object.keys(backMeasuredValues).length > 0
+    const hasAnyData = hasFrontData || hasBackData
 
     // ════════════════════════════════════════════════════════════════════
     // FAST PATH: No measurement work was done — just reset and move on.
@@ -1616,69 +1381,31 @@ export function ArticlesList() {
         const backQCResult = backSideComplete && backQCChecked
           ? (failedMeasurements.length === 0 && qcPassed ? 'PASS' : 'FAIL') : null
 
-        await window.database.execute(`
-          INSERT INTO measurement_sessions 
-            (purchase_order_article_id, size, article_style, operator_id, 
-             front_side_complete, back_side_complete, 
-             front_qc_result, back_qc_result,
-             completed_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
-          ON DUPLICATE KEY UPDATE
-            front_side_complete = VALUES(front_side_complete),
-            back_side_complete = VALUES(back_side_complete),
-            front_qc_result = VALUES(front_qc_result),
-            back_qc_result = VALUES(back_qc_result),
-            completed_at = NOW()
-        `, [
-          selectedPOArticleId,
-          selectedSize,
-          articleStyle,
-          operator.id,
-          frontSideComplete ? 1 : 0,
-          backSideComplete ? 1 : 0,
-          frontQCResult,
-          backQCResult
-        ])
+        await window.api.saveMeasurementSession({
+          purchase_order_article_id: selectedPOArticleId,
+          size: selectedSize,
+          article_style: articleStyle,
+          article_id: selectedArticleId || undefined,
+          purchase_order_id: selectedPOId || undefined,
+          operator_id: operator.id,
+          status: (frontSideComplete && backSideComplete) ? 'completed' : 'in_progress',
+          front_side_complete: frontSideComplete,
+          back_side_complete: backSideComplete,
+          front_qc_result: frontQCResult,
+          back_qc_result: backQCResult
+        })
         console.log('[NEXT] Session record saved')
-      }
-
-      // ── Step 3: Lightweight non-blocking verification (log only, never blocks) ──
-      if (selectedPOArticleId && selectedSize) {
-        try {
-          const verifyBasic = await window.database.execute(`
-            SELECT COUNT(*) as cnt FROM measurement_results 
-            WHERE purchase_order_article_id = ? AND size = ?
-          `, [selectedPOArticleId, selectedSize]) as any
-          const basicRows = verifyBasic?.[0]?.[0]?.cnt ?? verifyBasic?.[0]?.cnt ?? 0
-
-          let detailedRows = 0
-          try {
-            const verifyDetailed = await window.database.execute(`
-              SELECT COUNT(*) as cnt FROM measurement_results_detailed 
-              WHERE purchase_order_article_id = ? AND size = ?
-            `, [selectedPOArticleId, selectedSize]) as any
-            detailedRows = verifyDetailed?.[0]?.[0]?.cnt ?? verifyDetailed?.[0]?.cnt ?? 0
-          } catch { detailedRows = -1 }
-
-          console.log(`[NEXT] Verification (non-blocking): measurement_results=${basicRows}, measurement_results_detailed=${detailedRows}`)
-          if (basicRows === 0) {
-            console.warn('[NEXT] ⚠ Post-save verification: 0 rows in measurement_results — data may not have persisted correctly')
-          }
-        } catch (verifyErr) {
-          // Verification failure is non-blocking — save already succeeded
-          console.warn('[NEXT] Verification query failed (non-blocking):', verifyErr)
-        }
       }
 
       console.log('[NEXT] All data saved successfully')
 
-      // ── Step 4: Reset panel for next article ──
+      // ── Step 3: Reset panel for next article ──
       resetPanelForNextArticle()
 
     } catch (err) {
-      // Only show error for actual database write failures (SQL error / IPC failure)
-      console.error('[NEXT] Database write error during save:', err)
-      setError('Failed to save measurements to database. Please try again.')
+      // Only show error for actual API write failures
+      console.error('[NEXT] API write error during save:', err)
+      setError('Failed to save measurements. Please try again.')
     } finally {
       setIsSavingNextArticle(false)
     }
@@ -1691,7 +1418,7 @@ export function ArticlesList() {
     // Stop any active polling/measurement
     if (isPollingActive) {
       setIsPollingActive(false)
-      window.measurement.stop().catch(() => {})
+      window.measurement.stop().catch(() => { })
     }
 
     setShowQCResult(false)
@@ -1725,16 +1452,16 @@ export function ArticlesList() {
   const handleCheckQC = async (side?: 'front' | 'back') => {
     // Determine which measurements to check
     const targetSide = side || lastQCSide || (frontSideComplete ? 'front' : backSideComplete ? 'back' : null)
-    
+
     if (!targetSide) {
       setError('Please complete at least one side measurement before checking QC')
       return
     }
-    
+
     const valuesToCheck = targetSide === 'front' ? frontMeasuredValues : backMeasuredValues
-    
+
     console.log(`[QC] Checking QC for ${targetSide} side with ${Object.keys(valuesToCheck).length} measurements`)
-    
+
     // Calculate QC result
     const failed: { code: string, measurement: string, expected: number, actual: number }[] = []
 
@@ -1771,13 +1498,13 @@ export function ArticlesList() {
     setQcPassed(failed.length === 0)
     setLastQCSide(targetSide)
     setShowQCResult(true)
-    
+
     if (targetSide === 'front') {
       setFrontQCChecked(true)
     } else {
       setBackQCChecked(true)
     }
-    
+
     console.log(`[QC] ${targetSide} side QC Result: ${failed.length === 0 ? 'PASSED ✓' : 'FAILED ✗'}`)
   }
 
@@ -1851,35 +1578,29 @@ export function ArticlesList() {
     console.log('[SAVE] Saving measurements for PO Article:', selectedPOArticleId, 'Size:', selectedSize)
 
     try {
-      let savedCount = 0
-      for (const spec of measurementSpecs) {
+      const articleStyle = jobCardSummary?.article_style ||
+        articles.find(a => a.id === selectedArticleId)?.article_style || ''
+
+      const results = measurementSpecs.map(spec => {
         const valueStr = measuredValues[spec.id]
         const value = valueStr ? parseFloat(valueStr) : null
         const status = calculateStatus(spec)
+        return {
+          purchase_order_article_id: selectedPOArticleId,
+          measurement_id: spec.id,
+          size: selectedSize,
+          article_style: articleStyle,
+          measured_value: value,
+          expected_value: parseFloat(String(spec.expected_value)) || 0,
+          tol_plus: parseFloat(String(spec.tol_plus)) || 0,
+          tol_minus: parseFloat(String(spec.tol_minus)) || 0,
+          status: status,
+          operator_id: operator?.id || null
+        }
+      })
 
-        const sql = `
-          INSERT INTO measurement_results 
-            (purchase_order_article_id, measurement_id, size, measured_value, status, operator_id)
-          VALUES (?, ?, ?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE
-            measured_value = VALUES(measured_value),
-            status = VALUES(status),
-            operator_id = VALUES(operator_id),
-            updated_at = CURRENT_TIMESTAMP
-        `
-        await window.database.execute(sql, [
-          selectedPOArticleId,
-          spec.id,
-          selectedSize,
-          value,
-          status,
-          operator?.id || null
-        ])
-        savedCount++
-        console.log(`[SAVE] Saved ${spec.code}: value=${value}, status=${status}`)
-      }
-
-      console.log(`[SAVE] Successfully saved ${savedCount} measurements`)
+      await window.api.saveMeasurementResults(results)
+      console.log(`[SAVE] Successfully saved ${results.length} measurements`)
       return true
     } catch (err) {
       console.error('[SAVE] Failed to save measurements:', err)
@@ -1911,62 +1632,15 @@ export function ArticlesList() {
     console.log(`[SAVE] Checked POM IDs: [${[...checkedIds].join(', ')}]`)
 
     try {
-      // Delete previous measurements for this article/size/side (remeasure logic)
-      await window.database.execute(`
-        DELETE FROM measurement_results_detailed 
-        WHERE purchase_order_article_id = ? AND size = ? AND side = ?
-      `, [selectedPOArticleId, selectedSize, side])
-      console.log(`[SAVE] Cleared old ${side} side measurements`)
+      // Build the detailed results array for API bulk save
+      const detailedResults: any[] = []
+      const basicResults: any[] = []
 
-      let savedCount = 0
       for (const spec of measurementSpecs) {
-        // STRICT: only persist rows the operator explicitly checked
         if (!checkedIds.has(spec.id)) {
           console.log(`[SAVE] Skipping unchecked POM ${spec.code} (id=${spec.id})`)
           continue
         }
-
-        const valueStr = measurements[spec.id]
-        const value = valueStr ? parseFloat(valueStr) : null
-        if (value === null || isNaN(value)) continue // Skip empty / invalid
-
-        // Use operator-edited tolerances if available, otherwise spec defaults
-        const tols = editableTols[spec.id]
-        const tolPlus = tols ? (parseFloat(tols.tol_plus) || parseFloat(String(spec.tol_plus)) || 0) : (parseFloat(String(spec.tol_plus)) || 0)
-        const tolMinus = tols ? (parseFloat(tols.tol_minus) || parseFloat(String(spec.tol_minus)) || 0) : (parseFloat(String(spec.tol_minus)) || 0)
-        const expected = parseFloat(String(spec.expected_value)) || 0
-        // Convert measured cm to spec unit for comparison (expected/tol are in spec unit)
-        const specUnitIsInch = baseUnit.toLowerCase().includes('inch')
-        const valueInSpecUnit = specUnitIsInch ? value * CM_TO_INCH : value
-        const minValid = expected - tolMinus
-        const maxValid = expected + tolPlus
-        const status = (valueInSpecUnit >= minValid && valueInSpecUnit <= maxValid) ? 'PASS' : 'FAIL'
-
-        // Save to detailed results table with side info + garment_color
-        await window.database.execute(`
-          INSERT INTO measurement_results_detailed 
-            (purchase_order_article_id, measurement_id, size, side, article_style,
-             measured_value, expected_value, tol_plus, tol_minus, status, operator_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [
-          selectedPOArticleId,
-          spec.id,
-          selectedSize,
-          side,
-          articleStyle,
-          value,      // Always cm
-          expected,   // Always cm
-          tolPlus,    // Always cm
-          tolMinus,   // Always cm
-          status,
-          operator?.id || null
-        ])
-        savedCount++
-      }
-
-      // Also update backward-compatible measurement_results table (checked rows only)
-      for (const spec of measurementSpecs) {
-        if (!checkedIds.has(spec.id)) continue
 
         const valueStr = measurements[spec.id]
         const value = valueStr ? parseFloat(valueStr) : null
@@ -1982,26 +1656,46 @@ export function ArticlesList() {
         const maxValid = expected + tolPlus
         const status = (valueInSpecUnit >= minValid && valueInSpecUnit <= maxValid) ? 'PASS' : 'FAIL'
 
-        await window.database.execute(`
-          INSERT INTO measurement_results 
-            (purchase_order_article_id, measurement_id, size, measured_value, status, operator_id)
-          VALUES (?, ?, ?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE
-            measured_value = VALUES(measured_value),
-            status = VALUES(status),
-            operator_id = VALUES(operator_id),
-            updated_at = CURRENT_TIMESTAMP
-        `, [
-          selectedPOArticleId,
-          spec.id,
-          selectedSize,
-          value,
-          status,
-          operator?.id || null
-        ])
+        detailedResults.push({
+          purchase_order_article_id: selectedPOArticleId,
+          measurement_id: spec.id,
+          size: selectedSize,
+          side: side,
+          article_style: articleStyle,
+          measured_value: value,
+          expected_value: expected,
+          tol_plus: tolPlus,
+          tol_minus: tolMinus,
+          status: status,
+          operator_id: operator?.id || null
+        })
+
+        basicResults.push({
+          purchase_order_article_id: selectedPOArticleId,
+          measurement_id: spec.id,
+          size: selectedSize,
+          measured_value: value,
+          status: status,
+          operator_id: operator?.id || null
+        })
       }
 
-      console.log(`[SAVE] Successfully saved ${savedCount} checked ${side} side measurements (of ${measurementSpecs.length} total specs)`)
+      // Save detailed results with side info via API
+      if (detailedResults.length > 0) {
+        await window.api.saveMeasurementResultsDetailed({
+          side: side,
+          purchase_order_article_id: selectedPOArticleId,
+          size: selectedSize,
+          results: detailedResults
+        })
+      }
+
+      // Also save backward-compatible measurement_results
+      if (basicResults.length > 0) {
+        await window.api.saveMeasurementResults(basicResults)
+      }
+
+      console.log(`[SAVE] Successfully saved ${detailedResults.length} checked ${side} side measurements (of ${measurementSpecs.length} total specs)`)
       return true
     } catch (err) {
       console.error(`[SAVE] Failed to save ${side} side measurements:`, err)
@@ -2136,41 +1830,28 @@ export function ArticlesList() {
     }
   }
 
-  // Load existing measurement results from database
+  // Load existing measurement results from API
   const loadExistingMeasurements = async (poArticleId: number) => {
     if (!selectedSize) return
 
     try {
       console.log('[LOAD] Loading existing measurements for PO Article:', poArticleId, 'Size:', selectedSize)
 
-      const sql = `
-        SELECT mr.measurement_id, mr.measured_value, mr.status, mr.tol_plus, mr.tol_minus
-        FROM measurement_results mr
-        JOIN measurements m ON m.id = mr.measurement_id AND m.deleted_at IS NULL
-        WHERE mr.purchase_order_article_id = ?
-        AND mr.size = ?
-      `
-      const result = await window.database.query<{
-        measurement_id: number
-        measured_value: number | null
-        status: string
-      }>(sql, [poArticleId, selectedSize])
+      const result = await window.api.getMeasurementResults(poArticleId, selectedSize)
 
       if (result.success && result.data && result.data.length > 0) {
         console.log('[LOAD] Found', result.data.length, 'existing measurements')
 
-        // Restore measured values
         const values: Record<number, string> = {}
 
-        result.data.forEach(row => {
+        result.data.forEach((row: any) => {
           if (row.measured_value !== null) {
-            values[row.measurement_id] = row.measured_value.toFixed(2)
+            values[row.measurement_id] = Number(row.measured_value).toFixed(2)
           }
         })
 
         setMeasuredValues(values)
 
-        // Mark as complete if all measurements have values
         const allComplete = measurementSpecs.every(spec => values[spec.id] && values[spec.id] !== '')
         if (allComplete) {
           setMeasurementComplete(true)
@@ -2183,6 +1864,7 @@ export function ArticlesList() {
       console.error('[LOAD] Failed to load existing measurements:', err)
     }
   }
+
 
   const handleBack = async () => {
     // Stop any active measurement
@@ -2256,16 +1938,9 @@ export function ArticlesList() {
   // Helper function to fetch sizes and return them
   const fetchAvailableSizesAndReturn = async (articleId: number): Promise<string[]> => {
     try {
-      const sql = `
-        SELECT DISTINCT ms.size
-        FROM measurement_sizes ms
-        JOIN measurements m ON ms.measurement_id = m.id
-        WHERE m.article_id = ? AND m.deleted_at IS NULL
-        ORDER BY FIELD(ms.size, 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', '3XL')
-      `
-      const result = await window.database.query<{ size: string }>(sql, [articleId])
+      const result = await window.api.getAvailableSizes(articleId)
       if (result.success && result.data && result.data.length > 0) {
-        const sizes = result.data.map(r => r.size)
+        const sizes = result.data
         console.log('[SIZES] Loaded available sizes:', sizes)
         setAvailableSizes(sizes)
         return sizes
@@ -2281,31 +1956,14 @@ export function ArticlesList() {
   const loadMeasurementsDirectlyFromArticle = async (articleId: number, size: string) => {
     try {
       console.log('[DIRECT_LOAD] Loading measurements for article:', articleId, 'size:', size)
-      const directQuery = `
-        SELECT 
-          m.id,
-          m.code,
-          m.measurement,
-          COALESCE(m.tol_plus, 0) as tol_plus,
-          COALESCE(m.tol_minus, 0) as tol_minus,
-          ms.size,
-          ms.value as expected_value,
-          ms.unit as unit,
-          a.id as article_id
-        FROM articles a
-        JOIN measurements m ON m.article_id = a.id AND m.deleted_at IS NULL
-        JOIN measurement_sizes ms ON ms.measurement_id = m.id
-        WHERE a.id = ? AND UPPER(TRIM(ms.size)) = UPPER(TRIM(?))
-        ORDER BY m.id
-      `
-      const result = await window.database.query<MeasurementSpec & { article_id?: number }>(directQuery, [articleId, size])
+      const result = await window.api.getMeasurementSpecs(articleId, size)
       console.log('[DIRECT_LOAD] Query result:', result.data?.length || 0, 'measurements')
 
       if (result.success && result.data && result.data.length > 0) {
-        console.log('[DIRECT_LOAD] ✓ Loaded measurements:', result.data.map((m: MeasurementSpec) => `${m.code}/${m.measurement}(id=${m.id})`).join(', '))
-        setMeasurementSpecs(result.data as MeasurementSpec[])
+        console.log('[DIRECT_LOAD] ✓ Loaded measurements:', result.data.map((m: any) => `${m.code}/${m.measurement}(id=${m.id})`).join(', '))
+        setMeasurementSpecs(result.data as unknown as MeasurementSpec[])
         const initialValues: Record<number, string> = {}
-        result.data.forEach((spec: MeasurementSpec) => {
+        result.data.forEach((spec: any) => {
           initialValues[spec.id] = ''
         })
         setMeasuredValues(initialValues)
@@ -2508,9 +2166,8 @@ export function ArticlesList() {
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-white rounded-lg px-2 py-1">
-                        <span className={`font-extrabold text-primary text-center leading-tight break-words uppercase tracking-wide ${
-                          brand.name.length <= 4 ? 'text-2xl' : brand.name.length <= 8 ? 'text-lg' : brand.name.length <= 14 ? 'text-base' : 'text-sm'
-                        }`}>
+                        <span className={`font-extrabold text-primary text-center leading-tight break-words uppercase tracking-wide ${brand.name.length <= 4 ? 'text-2xl' : brand.name.length <= 8 ? 'text-lg' : brand.name.length <= 14 ? 'text-base' : 'text-sm'
+                          }`}>
                           {brand.name}
                         </span>
                       </div>
@@ -2627,31 +2284,28 @@ export function ArticlesList() {
                 <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => setSelectedColor(prev => prev === 'white' ? null : 'white')}
-                    className={`px-3 py-1.5 text-[12px] font-bold rounded-md border active:scale-95 transition-all whitespace-nowrap ${
-                      selectedColor === 'white'
-                        ? 'bg-white text-primary border-primary shadow-md ring-2 ring-primary/30'
-                        : 'bg-white text-slate-600 border-slate-200 hover:border-primary/40 hover:text-primary'
-                    }`}
+                    className={`px-3 py-1.5 text-[12px] font-bold rounded-md border active:scale-95 transition-all whitespace-nowrap ${selectedColor === 'white'
+                      ? 'bg-white text-primary border-primary shadow-md ring-2 ring-primary/30'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-primary/40 hover:text-primary'
+                      }`}
                   >
                     White
                   </button>
                   <button
                     onClick={() => setSelectedColor(prev => prev === 'black' ? null : 'black')}
-                    className={`px-3 py-1.5 text-[12px] font-bold rounded-md border active:scale-95 transition-all whitespace-nowrap ${
-                      selectedColor === 'black'
-                        ? 'bg-slate-900 text-white border-slate-900 shadow-md'
-                        : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 hover:text-slate-800'
-                    }`}
+                    className={`px-3 py-1.5 text-[12px] font-bold rounded-md border active:scale-95 transition-all whitespace-nowrap ${selectedColor === 'black'
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-md'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 hover:text-slate-800'
+                      }`}
                   >
                     Black
                   </button>
                   <button
                     onClick={() => setSelectedColor(prev => prev === 'other' ? null : 'other')}
-                    className={`px-3 py-1.5 text-[12px] font-bold rounded-md border active:scale-95 transition-all whitespace-nowrap ${
-                      selectedColor === 'other'
-                        ? 'bg-gradient-to-r from-rose-400 via-amber-400 to-teal-400 text-white border-transparent shadow-md'
-                        : 'bg-white text-slate-600 border-slate-200 hover:border-primary/40 hover:text-primary'
-                    }`}
+                    className={`px-3 py-1.5 text-[12px] font-bold rounded-md border active:scale-95 transition-all whitespace-nowrap ${selectedColor === 'other'
+                      ? 'bg-gradient-to-r from-rose-400 via-amber-400 to-teal-400 text-white border-transparent shadow-md'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-primary/40 hover:text-primary'
+                      }`}
                   >
                     Other
                   </button>
@@ -2725,19 +2379,17 @@ export function ArticlesList() {
                   measurementSpecs.map((spec) => {
                     const status = calculateStatus(spec)
                     return (
-                      <tr key={spec.id} className={`transition-colors ${
-                        isShiftLocked
-                          ? (selectedMeasurementIds.has(spec.id) ? 'hover:bg-slate-50/80' : 'bg-slate-50/30 opacity-50 border-l-2 border-l-slate-200')
-                          : (selectedMeasurementIds.has(spec.id) ? 'bg-success/5' : 'hover:bg-slate-50/80')
-                      }`}>
+                      <tr key={spec.id} className={`transition-colors ${isShiftLocked
+                        ? (selectedMeasurementIds.has(spec.id) ? 'hover:bg-slate-50/80' : 'bg-slate-50/30 opacity-50 border-l-2 border-l-slate-200')
+                        : (selectedMeasurementIds.has(spec.id) ? 'bg-success/5' : 'hover:bg-slate-50/80')
+                        }`}>
                         <td className="px-1 py-3 text-center align-middle">
                           <button
                             onClick={() => toggleMeasurementSelection(spec.id)}
-                            className={`w-7 h-7 rounded-md border-2 flex items-center justify-center transition-all active:scale-90 mx-auto ${
-                              selectedMeasurementIds.has(spec.id)
-                                ? 'border-success bg-success/10'
-                                : 'border-slate-300 bg-white hover:border-slate-400'
-                            }`}
+                            className={`w-7 h-7 rounded-md border-2 flex items-center justify-center transition-all active:scale-90 mx-auto ${selectedMeasurementIds.has(spec.id)
+                              ? 'border-success bg-success/10'
+                              : 'border-slate-300 bg-white hover:border-slate-400'
+                              }`}
                           >
                             {selectedMeasurementIds.has(spec.id) && (
                               <svg className="w-4 h-4 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2816,8 +2468,8 @@ export function ArticlesList() {
                             }`}>
                             {measuredValues[spec.id]
                               ? (selectedMeasurementIds.has(spec.id)
-                                  ? convertResultForDisplay(parseFloat(measuredValues[spec.id]))
-                                  : parseFloat(measuredValues[spec.id]).toFixed(2))
+                                ? convertResultForDisplay(parseFloat(measuredValues[spec.id]))
+                                : parseFloat(measuredValues[spec.id]).toFixed(2))
                               : '--'}
                           </div>
                         </td>
@@ -2889,7 +2541,7 @@ export function ArticlesList() {
                 disabled={!selectedSize || isPollingActive}
                 className={`py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1 ${!selectedSize || isPollingActive
                   ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                  : frontSideComplete 
+                  : frontSideComplete
                     ? 'bg-success/20 text-success border-2 border-success hover:bg-success hover:text-white shadow-md'
                     : 'bg-primary text-white hover:bg-primary-dark shadow-md'
                   }`}
@@ -2922,7 +2574,7 @@ export function ArticlesList() {
                 disabled={!selectedSize || isPollingActive}
                 className={`py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1 ${!selectedSize || isPollingActive
                   ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                  : backSideComplete 
+                  : backSideComplete
                     ? 'bg-success/20 text-success border-2 border-success hover:bg-success hover:text-white shadow-md'
                     : 'bg-success text-white hover:bg-success/90 shadow-md'
                   }`}

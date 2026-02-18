@@ -20,42 +20,55 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   },
 })
 
-// --------- Expose Database API to the Renderer process ---------
-contextBridge.exposeInMainWorld('database', {
-  /**
-   * Execute a SELECT query and return array of results
-   */
-  query: async <T = any>(sql: string, params?: any[]): Promise<{ success: boolean; data?: T[]; error?: string }> => {
-    return ipcRenderer.invoke('db:query', sql, params)
-  },
+// --------- Expose MagicQC API to the Renderer process ---------
+// All data access now goes through GraphQL (single POST /graphql endpoint).
+// Annotations and ping still use REST (per guide §9).
+contextBridge.exposeInMainWorld('api', {
+  // Connection test (REST)
+  ping: () => ipcRenderer.invoke('api:ping'),
 
-  /**
-   * Execute a SELECT query and return single result
-   */
-  queryOne: async <T = any>(sql: string, params?: any[]): Promise<{ success: boolean; data?: T | null; error?: string }> => {
-    return ipcRenderer.invoke('db:queryOne', sql, params)
-  },
+  // Brands → Article Types → Articles cascade (GraphQL)
+  getBrands: () => ipcRenderer.invoke('api:brands'),
+  getArticleTypes: (brandId: number) => ipcRenderer.invoke('api:articleTypes', brandId),
+  getArticles: (brandId: number, typeId?: number | null) =>
+    ipcRenderer.invoke('api:articles', brandId, typeId),
 
-  /**
-   * Execute INSERT, UPDATE, or DELETE query
-   */
-  execute: async (sql: string, params?: any[]): Promise<{ success: boolean; data?: { affectedRows: number; insertId?: number }; error?: string }> => {
-    return ipcRenderer.invoke('db:execute', sql, params)
-  },
+  // Purchase Orders (GraphQL)
+  getPurchaseOrders: (brandId: number) => ipcRenderer.invoke('api:purchaseOrders', brandId),
+  getAllPurchaseOrders: (status?: string) => ipcRenderer.invoke('api:purchaseOrdersAll', status),
+  getPOArticles: (poId: number) => ipcRenderer.invoke('api:poArticles', poId),
 
-  /**
-   * Securely verify operator PIN against hashes
-   */
-  verifyPin: async (pin: string): Promise<{ success: boolean; data?: any; error?: string }> => {
-    return ipcRenderer.invoke('db:verifyPin', pin)
-  },
+  // Measurement Specs & Sizes (GraphQL)
+  getMeasurementSpecs: (articleId: number, size: string) =>
+    ipcRenderer.invoke('api:measurementSpecs', articleId, size),
+  getAvailableSizes: (articleId: number) =>
+    ipcRenderer.invoke('api:availableSizes', articleId),
 
-  /**
-   * Test database connection
-   */
-  testConnection: async (): Promise<{ success: boolean; message?: string; error?: string }> => {
-    return ipcRenderer.invoke('db:testConnection')
-  },
+  // Measurement Results CRUD (GraphQL mutations + REST fallback for GET)
+  getMeasurementResults: (poArticleId: number, size: string) =>
+    ipcRenderer.invoke('api:measurementResults', poArticleId, size),
+  saveMeasurementResults: (results: any[]) =>
+    ipcRenderer.invoke('api:saveMeasurementResults', results),
+  saveMeasurementResultsDetailed: (data: any) =>
+    ipcRenderer.invoke('api:saveMeasurementResultsDetailed', data),
+
+  // Measurement Sessions (GraphQL mutation)
+  saveMeasurementSession: (data: any) =>
+    ipcRenderer.invoke('api:saveMeasurementSession', data),
+
+  // Operator Authentication (GraphQL mutation)
+  verifyPin: (pin: string) => ipcRenderer.invoke('api:verifyPin', pin),
+
+  // Operators List (GraphQL)
+  getOperators: () => ipcRenderer.invoke('api:operators'),
+
+  // Annotation + Reference Image (REST — per guide §9)
+  operatorFetch: (articleStyle: string, size: string, side?: string, color?: string) =>
+    ipcRenderer.invoke('api:operatorFetch', articleStyle, size, side, color),
+
+  // Image fetch base64 (REST — per guide §9)
+  fetchImageBase64: (articleStyle: string, size: string, side?: string) =>
+    ipcRenderer.invoke('api:fetchImageBase64', articleStyle, size, side),
 })
 
 // --------- Expose Measurement API to the Renderer process ---------
@@ -87,4 +100,3 @@ contextBridge.exposeInMainWorld('measurement', {
     image_base64: string
   }) => ipcRenderer.invoke('measurement:saveTempFiles', data),
 })
-

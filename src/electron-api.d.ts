@@ -1,11 +1,91 @@
-import { Operator, DatabaseQueryResult, DatabaseOneResult, DatabaseExecuteResult } from './types/database'
+// ─── MagicQC API Interface (GraphQL + REST) ─────────────────────────────────
 
-interface DatabaseAPI {
-    query: <T = any>(sql: string, params?: any[]) => Promise<{ success: boolean; data?: T[]; error?: string }>
-    queryOne: <T = any>(sql: string, params?: any[]) => Promise<{ success: boolean; data?: T | null; error?: string }>
-    execute: (sql: string, params?: any[]) => Promise<{ success: boolean; data?: { affectedRows: number; insertId?: number }; error?: string }>
+interface MagicQCAPI {
+    // Connection (REST)
+    ping: () => Promise<{ success: boolean; message?: string; error?: string }>
+
+    // Brands / Article Types / Articles cascade (GraphQL)
+    getBrands: () => Promise<{ success: boolean; data?: Array<{ id: number; name: string }>; error?: string }>
+    getArticleTypes: (brandId: number) => Promise<{ success: boolean; data?: Array<{ id: number; name: string }>; error?: string }>
+    getArticles: (brandId: number, typeId?: number | null) => Promise<{
+        success: boolean; data?: Array<{
+            id: number; article_style: string; description?: string
+            brand?: { id: number; name: string }
+            articleType?: { id: number; name: string }
+        }>; error?: string
+    }>
+
+    // Purchase Orders (GraphQL)
+    getPurchaseOrders: (brandId: number) => Promise<{
+        success: boolean; data?: Array<{
+            id: number; po_number: string; date?: string; country?: string; status?: string
+            brand?: { id: number; name: string }
+            articles?: Array<{ id: number; article_color?: string; order_quantity?: number }>
+        }>; error?: string
+    }>
+    getAllPurchaseOrders: (status?: string) => Promise<{
+        success: boolean; data?: Array<{
+            id: number; po_number: string; date?: string; country?: string; status?: string
+            brand?: { id: number; name: string }
+        }>; error?: string
+    }>
+    getPOArticles: (poId: number) => Promise<{
+        success: boolean; data?: Array<{
+            id: number; article_color?: string; order_quantity?: number
+            purchaseOrder?: { po_number: string }
+        }>; error?: string
+    }>
+
+    // Measurement Specs & Sizes (GraphQL)
+    getMeasurementSpecs: (articleId: number, size: string) => Promise<{
+        success: boolean; data?: Array<{
+            id: number; measurement_id?: number; code: string; measurement: string;
+            expected_value: number; tol_plus: number; tol_minus: number;
+            side?: string; size?: string; article_id?: number
+            sizes?: Array<{ size: string; value: number }>
+        }>; error?: string
+    }>
+    getAvailableSizes: (articleId: number) => Promise<{ success: boolean; data?: string[]; error?: string }>
+
+    // Measurement Results (GraphQL mutations + REST GET fallback)
+    getMeasurementResults: (poArticleId: number, size: string) => Promise<{
+        success: boolean; data?: Array<{
+            measurement_id: number; measured_value: number | null; status: string;
+            tol_plus?: number; tol_minus?: number
+        }>; error?: string
+    }>
+    saveMeasurementResults: (results: any[]) => Promise<{ success: boolean; data?: any; error?: string }>
+    saveMeasurementResultsDetailed: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
+
+    // Sessions (GraphQL mutation)
+    saveMeasurementSession: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
+
+    // Authentication (GraphQL mutation)
     verifyPin: (pin: string) => Promise<{ success: boolean; data?: any; error?: string }>
-    testConnection: () => Promise<{ success: boolean; message?: string; error?: string }>
+
+    // Operators (GraphQL)
+    getOperators: () => Promise<{
+        success: boolean; data?: Array<{
+            id: number; full_name: string; employee_id: string; department: string; contact_number?: string
+        }>; error?: string
+    }>
+
+    // Annotations (REST — per guide §9)
+    operatorFetch: (articleStyle: string, size: string, side?: string, color?: string) => Promise<{
+        success: boolean; source?: string;
+        annotation?: {
+            id: number; article_style: string; size: string; side: string; color?: string;
+            annotation_data: any; image_width: number; image_height: number;
+            reference_image_data?: string; reference_image_mime_type?: string;
+        };
+        reference_image?: {
+            data: string; mime_type: string; data_url: string; width: number; height: number;
+        } | null;
+        error?: string
+    }>
+    fetchImageBase64: (articleStyle: string, size: string, side?: string) => Promise<{
+        success: boolean; image?: { data: string; mime_type: string; width: number; height: number }; error?: string
+    }>
 }
 
 interface MeasurementAPI {
@@ -13,25 +93,22 @@ interface MeasurementAPI {
         annotation_name: string;
         article_style?: string;
         side?: string;
-        garment_color?: string;  // 'white', 'black', or 'other'
-        color_code?: string;     // Color suffix code: 'w' (white), 'b' (black), 'z' (other)
-        // New measurement-ready data from database
-        keypoints_pixels?: string | null;   // JSON string [[x, y], ...] (pixel coordinates)
-        target_distances?: string | null;   // JSON string {"1": 3.81, ...} (distances in cm)
-        placement_box?: string | null;      // JSON string [x1, y1, x2, y2]
+        garment_color?: string;
+        color_code?: string;
+        keypoints_pixels?: string | null;
+        target_distances?: string | null;
+        placement_box?: string | null;
         image_width?: number | null;
         image_height?: number | null;
-        // Fallback: percentage-based annotations for conversion
-        annotation_data?: string;  // JSON string of annotation points [{x, y, label}]
-        image_data?: string;       // Base64 encoded reference image from database
-        image_mime_type?: string;  // MIME type of the image
-        measurement_specs?: string; // JSON string of spec info [{index, db_id, code, name, expected_value}]
+        annotation_data?: string;
+        image_data?: string;
+        image_mime_type?: string;
+        measurement_specs?: string;
     }) => Promise<{ status: string; message: string; data?: any }>
     stop: () => Promise<{ status: string; message: string }>
     getStatus: () => Promise<{ status: string; data: any }>
     getLiveResults: () => Promise<{ status: string; data: any; message?: string }>
     loadTestImage: (relativePath: string) => Promise<{ status: string; data?: string; message?: string }>
-    // Calibration methods
     startCalibration: () => Promise<{ status: string; message: string }>
     getCalibrationStatus: () => Promise<{ status: string; data: { calibrated: boolean; pixels_per_cm?: number; reference_length_cm?: number; calibration_date?: string } }>
     cancelCalibration: () => Promise<{ status: string; message: string }>
@@ -40,7 +117,6 @@ interface MeasurementAPI {
         reference_length_cm: number
         is_calibrated: boolean
     }) => Promise<{ status: string; message: string; data?: any }>
-    // Fetch image from Laravel API via main process (bypasses CORS)
     fetchLaravelImage: (articleStyle: string, size: string) => Promise<{
         status: string;
         data?: string;
@@ -49,7 +125,6 @@ interface MeasurementAPI {
         height?: number;
         message?: string
     }>
-    // Save annotation and image files to temp_measure folder
     saveTempFiles: (data: {
         keypoints: number[][]
         target_distances: Record<string, number>
@@ -69,8 +144,10 @@ interface IpcRenderer {
 
 declare global {
     interface Window {
-        database: DatabaseAPI
+        api: MagicQCAPI
         measurement: MeasurementAPI
         ipcRenderer: IpcRenderer
     }
 }
+
+export { }

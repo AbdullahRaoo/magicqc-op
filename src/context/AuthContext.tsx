@@ -35,7 +35,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsLoading(true)
         setError(null)
         try {
-            const result = await (window.database as any).verifyPin(pin)
+            const result = await window.api.verifyPin(pin)
 
             if (result.success && result.data) {
                 const opData = result.data

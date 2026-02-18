@@ -15,13 +15,19 @@ _logger = setup_file_logging('measurement')
 import json
 import time
 
+# Frozen-safe PROJECT_ROOT (same logic as core_main.py)
+if getattr(sys, 'frozen', False):
+    _PROJECT_ROOT = os.path.dirname(sys.executable)
+else:
+    _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 # Import the new CV engine from integration.py
 from integration import LiveKeypointDistanceMeasurer
 
 
 def run_headless_measurement():
     """Run measurement in headless mode (no interactive prompts) driven by API config."""
-    config_file = 'measurement_config.json'
+    config_file = os.path.join(_PROJECT_ROOT, 'measurement_config.json')
     if not os.path.exists(config_file):
         print(f"[ERR] Config file {config_file} not found")
         sys.exit(1)

@@ -1,11 +1,10 @@
 import { app, BrowserWindow, ipcMain, session } from 'electron'
-import bcrypt from 'bcryptjs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import fs from 'node:fs'
 import { spawn, ChildProcess } from 'node:child_process'
-import { initializeDatabase, closeDatabase, query, queryOne, execute } from './database'
-import { PYTHON_API_URL, LARAVEL_API_URL } from './apiConfig'
+import { PYTHON_API_URL, MAGICQC_API_BASE } from './apiConfig'
+import { apiClient } from './api-client'
 
 // Get __dirname equivalent for ES modules
 const __filename = fileURLToPath(import.meta.url)
@@ -36,7 +35,7 @@ let pythonLogStream: fs.WriteStream | null = null
 // Start Python API server automatically
 async function startPythonServer(): Promise<boolean> {
   return new Promise((resolve) => {
-    const pythonScript = path.join(process.env.APP_ROOT!, 'api_server.py')
+    const pythonScript = path.join(process.env.APP_ROOT!, 'python-core', 'core_main.py')
     console.log('🐍 Starting Python API server:', pythonScript)
 
     // Ensure logs directory exists and open a write-stream for Python output
@@ -183,13 +182,13 @@ function setupCSP() {
   // In production builds, this will be more restrictive
   const isDev = !!VITE_DEV_SERVER_URL
 
-  // Build CSP allowing the Python API and Laravel API origins dynamically
-  const pythonOrigin = PYTHON_API_URL   // e.g. http://localhost:5000
-  const laravelOrigin = LARAVEL_API_URL // e.g. http://127.0.0.1:8000
+  // Build CSP allowing the Python API and MagicQC API origins dynamically
+  const pythonOrigin = PYTHON_API_URL      // e.g. http://localhost:5000
+  const magicqcOrigin = MAGICQC_API_BASE    // e.g. https://magicqc.online
 
   const csp = isDev
-    ? `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* ws://localhost:* wss://localhost:*; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' ${pythonOrigin} ${laravelOrigin} http://localhost:* ws://localhost:* wss://localhost:*; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none';`
-    : `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https: blob:; connect-src 'self' ${pythonOrigin} ${laravelOrigin}; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none';`
+    ? `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* ws://localhost:* wss://localhost:*; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' ${pythonOrigin} ${magicqcOrigin} http://localhost:* ws://localhost:* wss://localhost:*; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none';`
+    : `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https: blob:; connect-src 'self' ${pythonOrigin} ${magicqcOrigin}; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none';`
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
@@ -199,9 +198,31 @@ function setupCSP() {
       }
     })
   })
+
+  // Operators list (GraphQL)
+  ipcMain.handle('api:operators', async () => {
+    try {
+      const operators = await apiClient.getOperators()
+      return { success: true, data: operators }
+    } catch (error) {
+      console.error('API operators error:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  })
+
+  // All Purchase Orders — no brand filter (GraphQL)
+  ipcMain.handle('api:purchaseOrdersAll', async (_event, status?: string) => {
+    try {
+      const pos = await apiClient.getAllPurchaseOrders(status)
+      return { success: true, data: pos }
+    } catch (error) {
+      console.error('API purchaseOrdersAll error:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  })
 }
 
-// Initialize database and create window when app is ready
+// Initialize app and create window when ready
 app.whenReady().then(async () => {
   try {
     // Clear Chromium cache on startup to prevent corruption-related blank screens
@@ -209,6 +230,16 @@ app.whenReady().then(async () => {
 
     // Set up Content Security Policy
     setupCSP()
+
+    // Ensure all runtime directories exist (critical for fresh installs)
+    const runtimeDirs = ['logs', 'storage', 'temp_annotations', 'temp_measure', 'measurement_results']
+    for (const dir of runtimeDirs) {
+      const dirPath = path.join(process.env.APP_ROOT!, dir)
+      if (!fs.existsSync(dirPath)) {
+        fs.mkdirSync(dirPath, { recursive: true })
+        console.log(`📁 Created runtime directory: ${dir}`)
+      }
+    }
 
     // Start Python API server automatically
     console.log('🚀 Starting application services...')
@@ -219,11 +250,19 @@ app.whenReady().then(async () => {
       console.warn('⚠️ Python server may not be available - measurement features may be limited')
     }
 
-    // Initialize database connection
-    await initializeDatabase()
+    // Test MagicQC API connectivity (non-blocking)
+    apiClient.ping().then(result => {
+      if (result.success) {
+        console.log('✅ MagicQC API connected successfully')
+      } else {
+        console.warn('⚠️ MagicQC API may not be available')
+      }
+    }).catch(err => {
+      console.warn('⚠️ MagicQC API unreachable:', err.message)
+    })
 
-    // Set up IPC handlers for database operations
-    setupDatabaseHandlers()
+    // Set up IPC handlers for API operations (replaces old database handlers)
+    setupApiHandlers()
 
     // Set up IPC handlers for measurement operations
     setupMeasurementHandlers()
@@ -236,86 +275,180 @@ app.whenReady().then(async () => {
   }
 })
 
-// Set up IPC handlers for database operations
-function setupDatabaseHandlers() {
-  // Query handler - returns array of results
-  ipcMain.handle('db:query', async (_event, sql: string, params?: any[]) => {
+// Set up IPC handlers for MagicQC API operations (replaces old database handlers)
+function setupApiHandlers() {
+  // Ping / connection test
+  ipcMain.handle('api:ping', async () => {
     try {
-      const results = await query(sql, params)
+      const result = await apiClient.ping()
+      return { success: result.success, message: 'API connection successful' }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'API unreachable' }
+    }
+  })
+
+  // Brands
+  ipcMain.handle('api:brands', async () => {
+    try {
+      const brands = await apiClient.getBrands()
+      return { success: true, data: brands }
+    } catch (error) {
+      console.error('API brands error:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  })
+
+  // Article Types
+  ipcMain.handle('api:articleTypes', async (_event, brandId: number) => {
+    try {
+      const types = await apiClient.getArticleTypes(brandId)
+      return { success: true, data: types }
+    } catch (error) {
+      console.error('API articleTypes error:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  })
+
+  // Articles (filtered)
+  ipcMain.handle('api:articles', async (_event, brandId: number, typeId?: number | null) => {
+    try {
+      const articles = await apiClient.getArticlesFiltered(brandId, typeId)
+      return { success: true, data: articles }
+    } catch (error) {
+      console.error('API articles error:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  })
+
+  // Purchase Orders
+  ipcMain.handle('api:purchaseOrders', async (_event, brandId: number) => {
+    try {
+      const pos = await apiClient.getPurchaseOrders(brandId)
+      return { success: true, data: pos }
+    } catch (error) {
+      console.error('API purchaseOrders error:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  })
+
+  // PO Articles
+  ipcMain.handle('api:poArticles', async (_event, poId: number) => {
+    try {
+      const articles = await apiClient.getPOArticles(poId)
+      return { success: true, data: articles }
+    } catch (error) {
+      console.error('API poArticles error:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  })
+
+  // Measurement Specs
+  ipcMain.handle('api:measurementSpecs', async (_event, articleId: number, size: string) => {
+    try {
+      const specs = await apiClient.getMeasurementSpecs(articleId, size)
+      return { success: true, data: specs }
+    } catch (error) {
+      console.error('API measurementSpecs error:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  })
+
+  // Available Sizes
+  ipcMain.handle('api:availableSizes', async (_event, articleId: number) => {
+    try {
+      const sizes = await apiClient.getAvailableSizes(articleId)
+      return { success: true, data: sizes }
+    } catch (error) {
+      console.error('API availableSizes error:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  })
+
+  // Measurement Results (Load)
+  ipcMain.handle('api:measurementResults', async (_event, poArticleId: number, size: string) => {
+    try {
+      const results = await apiClient.getMeasurementResults(poArticleId, size)
       return { success: true, data: results }
     } catch (error) {
-      console.error('Database query error:', error)
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      }
+      console.error('API measurementResults error:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
     }
   })
 
-  // QueryOne handler - returns single result
-  ipcMain.handle('db:queryOne', async (_event, sql: string, params?: any[]) => {
+  // Measurement Results (Save)
+  ipcMain.handle('api:saveMeasurementResults', async (_event, results: any[]) => {
     try {
-      const result = await queryOne(sql, params)
+      const result = await apiClient.saveMeasurementResults(results)
       return { success: true, data: result }
     } catch (error) {
-      console.error('Database queryOne error:', error)
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      }
+      console.error('API saveMeasurementResults error:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
     }
   })
 
-  // Execute handler - for INSERT, UPDATE, DELETE
-  ipcMain.handle('db:execute', async (_event, sql: string, params?: any[]) => {
+  // Measurement Results Detailed (Save with side)
+  ipcMain.handle('api:saveMeasurementResultsDetailed', async (_event, data: any) => {
     try {
-      const result = await execute(sql, params)
+      const result = await apiClient.saveMeasurementResultsDetailed(data)
       return { success: true, data: result }
     } catch (error) {
-      console.error('Database execute error:', error)
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      }
+      console.error('API saveMeasurementResultsDetailed error:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
     }
   })
 
-  // Verify PIN handler
-  ipcMain.handle('db:verifyPin', async (_event, pin: string) => {
+  // Measurement Sessions
+  ipcMain.handle('api:saveMeasurementSession', async (_event, data: any) => {
     try {
-      console.log(`[AUTH] Attempting login for PIN: ${pin}`);
-      const operators = await query('SELECT id, full_name, employee_id, department, login_pin FROM operators')
-
-      console.log(`[AUTH] Found ${operators.length} operators in database`);
-
-      for (const op of operators) {
-        if (op.login_pin) {
-          // Check for literal match (e.g. if stored as plain '0001')
-          if (op.login_pin === pin) {
-            console.log(`[AUTH] Plaintext match found for: ${op.full_name}`);
-            const { login_pin, ...opSafeData } = op
-            return { success: true, data: opSafeData }
-          }
-
-          // Check for Bcrypt match
-          try {
-            const isMatch = await bcrypt.compare(pin, op.login_pin)
-            console.log(`[AUTH] Bcrypt Match Result for ${op.full_name}: ${isMatch}`);
-            if (isMatch) {
-              const { login_pin, ...opSafeData } = op
-              return { success: true, data: opSafeData }
-            }
-          } catch (e: any) {
-            console.log(`[AUTH] Bcrypt Error: ${e.message}`);
-          }
-        }
-      }
-
-      console.log(`[AUTH] No match found for PIN: ${pin}`);
-      return { success: false, error: 'Invalid PIN. Please try again.' }
+      const result = await apiClient.saveMeasurementSession(data)
+      return { success: true, data: result }
     } catch (error) {
-      console.error('[AUTH] System error:', error)
+      console.error('API saveMeasurementSession error:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  })
+
+  // Verify PIN (now via API instead of local DB)
+  ipcMain.handle('api:verifyPin', async (_event, pin: string) => {
+    try {
+      console.log(`[AUTH] Verifying PIN via API...`)
+      const result = await apiClient.verifyPin(pin)
+      if (result.success && result.operator) {
+        console.log(`[AUTH] PIN verified for: ${result.operator.full_name}`)
+        return { success: true, data: result.operator }
+      }
+      console.log(`[AUTH] PIN verification failed: ${result.message || 'Invalid PIN'}`)
+      return { success: false, error: result.message || 'Invalid PIN. Please try again.' }
+    } catch (error) {
+      console.error('[AUTH] API error:', error)
       return { success: false, error: 'Authentication service unavailable' }
+    }
+  })
+
+  // Operator Fetch (annotation + image)
+  ipcMain.handle('api:operatorFetch', async (_event, articleStyle: string, size: string, side?: string, color?: string) => {
+    try {
+      console.log(`[operatorFetch] Calling: style='${articleStyle}', size='${size}', side='${side || 'front'}', color='${color || 'none'}'`)
+      const result = await apiClient.operatorFetch(articleStyle, size, side || 'front', color)
+      console.log(`[operatorFetch] Response: success=${result.success}, hasAnnotation=${!!result.annotation}, message=${result.message || 'none'}`)
+      if (result.annotation) {
+        console.log(`[operatorFetch] Annotation ID: ${result.annotation.id}, style: ${result.annotation.article_style}, size: ${result.annotation.size}`)
+      }
+      return result
+    } catch (error) {
+      console.error('API operatorFetch error:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  })
+
+  // Image fetch (base64)
+  ipcMain.handle('api:fetchImageBase64', async (_event, articleStyle: string, size: string, side?: string) => {
+    try {
+      const result = await apiClient.fetchImageBase64(articleStyle, size, side || 'front')
+      return result
+    } catch (error) {
+      console.error('API fetchImageBase64 error:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
     }
   })
 }
@@ -427,7 +560,7 @@ function setupMeasurementHandlers() {
       const fs = await import('fs')
 
       // Resolve path relative to app root
-      const appRoot = process.cwd()
+      const appRoot = process.env.APP_ROOT!
       const imagePath = path.join(appRoot, relativePath)
 
       console.log('[MAIN] Loading test image from:', imagePath)
@@ -506,10 +639,10 @@ function setupMeasurementHandlers() {
     }
   })
 
-  // Fetch reference image from Laravel API (bypasses CORS in renderer)
+  // Fetch reference image from MagicQC API (bypasses CORS in renderer)
   ipcMain.handle('measurement:fetchLaravelImage', async (_event, articleStyle: string, size: string) => {
-    // LARAVEL_API_URL is imported from apiConfig.ts (reads from .env)
-    const imageApiUrl = `${LARAVEL_API_URL}/api/uploaded-annotations/fetch-image-base64?article_style=${encodeURIComponent(articleStyle)}&size=${encodeURIComponent(size)}`
+    // MAGICQC_API_BASE is the base URL for REST endpoints (not /graphql)
+    const imageApiUrl = `${MAGICQC_API_BASE}/api/uploaded-annotations/fetch-image-base64?article_style=${encodeURIComponent(articleStyle)}&size=${encodeURIComponent(size)}`
 
     console.log('[MAIN] Fetching Laravel image:', imageApiUrl)
 
@@ -566,7 +699,7 @@ function setupMeasurementHandlers() {
     const path = await import('path')
     const fs = await import('fs')
 
-    const tempMeasureDir = path.join(process.cwd(), 'temp_measure')
+    const tempMeasureDir = path.join(process.env.APP_ROOT!, 'temp_measure')
 
     console.log('[MAIN] Saving files to temp_measure folder:', tempMeasureDir)
 
@@ -616,8 +749,7 @@ function setupMeasurementHandlers() {
   })
 }
 
-// Close database connection and stop Python server when app quits
+// Stop Python server when app quits
 app.on('before-quit', async () => {
   stopPythonServer()
-  await closeDatabase()
 })

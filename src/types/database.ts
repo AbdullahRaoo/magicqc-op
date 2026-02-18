@@ -7,9 +7,9 @@
 export interface Brand {
   id: number
   name: string
-  description: string | null
-  created_at: string | null
-  updated_at: string | null
+  description?: string | null
+  created_at?: string | null
+  updated_at?: string | null
 }
 
 // Article Type types
@@ -128,9 +128,10 @@ export interface Operator {
   full_name: string
   employee_id: string
   department: string | null
-  login_pin: string
-  created_at: string | null
-  updated_at: string | null
+  contact_number?: string | null
+  login_pin?: string
+  created_at?: string | null
+  updated_at?: string | null
 }
 
 // User types
