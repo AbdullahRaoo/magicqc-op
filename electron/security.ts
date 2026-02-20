@@ -209,26 +209,56 @@ function hashFile(filePath: string): string {
 
 /**
  * Verify magicqc_core.exe integrity against a stored hash.
- * On first run, generates and stores the hash.
- * On subsequent runs, validates against stored hash.
+ *
+ * Behaviour:
+ *  - First run (no stored hash)  → write hash + version → PASS
+ *  - Upgrade detected (version changed) → overwrite hash + version → PASS
+ *    This prevents a new installer build from being permanently blocked because
+ *    the previous version's hash file already exists in userData/secure/.
+ *  - Same version, hash matches → PASS
+ *  - Same version, hash differs → BLOCK (binary was tampered post-install)
+ *
+ * @param exePath       Absolute path to magicqc_core.exe
+ * @param hashStorePath Directory to persist core_integrity.sha256 and .version
+ * @param appVersion    Current app version string (e.g. "1.0.0")
  */
-export function checkBinaryIntegrity(exePath: string, hashStorePath: string): SecurityCheckResult {
+export function checkBinaryIntegrity(exePath: string, hashStorePath: string, appVersion = ''): SecurityCheckResult {
     if (!fs.existsSync(exePath)) {
         return { safe: false, reason: `Core binary not found: ${exePath}` }
     }
 
     const currentHash = hashFile(exePath)
-    const hashFile_ = path.join(hashStorePath, 'core_integrity.sha256')
+    const hashFilePath = path.join(hashStorePath, 'core_integrity.sha256')
+    const versionFilePath = path.join(hashStorePath, 'core_integrity.version')
 
-    if (!fs.existsSync(hashFile_)) {
-        // First run — store the hash
-        if (!fs.existsSync(hashStorePath)) fs.mkdirSync(hashStorePath, { recursive: true })
-        fs.writeFileSync(hashFile_, currentHash, 'utf8')
+    if (!fs.existsSync(hashStorePath)) fs.mkdirSync(hashStorePath, { recursive: true })
+
+    // ── Upgrade detection ─────────────────────────────────────────────────────
+    // If the stored app version differs from the running version, this is a fresh
+    // install or upgrade.  Re-register the new binary hash and let it through.
+    // Also re-register if the version file is missing (hash was written by older
+    // code that didn't track versions — treat as implicit upgrade).
+    if (appVersion) {
+        const storedVersion = fs.existsSync(versionFilePath)
+            ? fs.readFileSync(versionFilePath, 'utf8').trim()
+            : ''   // version file absent → old registration, treat as upgrade
+        if (storedVersion !== appVersion) {
+            // New version installed — re-register hash for the new EXE.
+            fs.writeFileSync(hashFilePath, currentHash, 'utf8')
+            fs.writeFileSync(versionFilePath, appVersion, 'utf8')
+            return { safe: true, reason: '' }
+        }
+    }
+
+    if (!fs.existsSync(hashFilePath)) {
+        // First run — store the hash and current version.
+        fs.writeFileSync(hashFilePath, currentHash, 'utf8')
+        if (appVersion) fs.writeFileSync(versionFilePath, appVersion, 'utf8')
         return { safe: true, reason: '' }
     }
 
-    // Validate against stored hash
-    const storedHash = fs.readFileSync(hashFile_, 'utf8').trim()
+    // ── Tamper check ──────────────────────────────────────────────────────────
+    const storedHash = fs.readFileSync(hashFilePath, 'utf8').trim()
     if (currentHash !== storedHash) {
         return {
             safe: false,

@@ -17,9 +17,25 @@ import time
 
 # Frozen-safe PROJECT_ROOT (same logic as core_main.py)
 if getattr(sys, 'frozen', False):
-    _PROJECT_ROOT = os.path.dirname(sys.executable)
+    exe_path = os.path.abspath(sys.executable)
+    exe_dir = os.path.dirname(exe_path)
+    # Handle nested dist/ layout in frozen mode
+    if os.path.basename(exe_dir) == 'dist':
+        parent = os.path.dirname(exe_dir)
+        if os.path.basename(parent) == 'python-core':
+            _PROJECT_ROOT = os.path.dirname(parent)
+        else:
+            _PROJECT_ROOT = parent
+    elif os.path.basename(exe_dir) == 'python-core':
+        _PROJECT_ROOT = os.path.dirname(exe_dir)
+    else:
+        _PROJECT_ROOT = exe_dir
 else:
+    # Dev: PROJECT_ROOT is parent of python-core/
     _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Support writable path redirection for Program Files installs
+_STORAGE_ROOT = os.environ.get('MAGICQC_STORAGE_ROOT', _PROJECT_ROOT)
 
 # Import the new CV engine from integration.py
 from integration import LiveKeypointDistanceMeasurer
@@ -27,7 +43,7 @@ from integration import LiveKeypointDistanceMeasurer
 
 def run_headless_measurement():
     """Run measurement in headless mode (no interactive prompts) driven by API config."""
-    config_file = os.path.join(_PROJECT_ROOT, 'measurement_config.json')
+    config_file = os.path.join(_STORAGE_ROOT, 'measurement_config.json')
     if not os.path.exists(config_file):
         print(f"[ERR] Config file {config_file} not found")
         sys.exit(1)
@@ -91,6 +107,11 @@ def run_headless_measurement():
         # Store metadata for result output
         measurer.current_annotation_name = annotation_name
         measurer.current_side = side
+
+        # CRITICAL: Align write path with API (RESULTS_PATH = storage/measurement_results)
+        measurer.results_path = results_path
+        _live_json_path = os.path.join(results_path, 'live_measurements.json')
+        print(f"[LIVE] Will write live_measurements.json to: {_live_json_path}")
 
         # Initialize camera in headless mode (skips interactive prompts)
         if not measurer.initialize_camera(headless=True):

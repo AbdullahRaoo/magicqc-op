@@ -87,7 +87,7 @@ function decrypt(data: Buffer): string {
  * In dev: project_root/secure/license.dat
  */
 export function getLicensePath(): string {
-    return path.join(process.env.APP_ROOT!, 'runtime', 'secure', 'license.dat')
+    return path.join(process.env.STORAGE_ROOT!, 'secure', 'license.dat')
 }
 
 /**

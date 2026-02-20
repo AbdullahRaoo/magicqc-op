@@ -1,3 +1,4 @@
+import './env-setup' // MUST BE FIRST - initializes paths and loads .env
 import { app, BrowserWindow, ipcMain, session } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -13,32 +14,13 @@ import {
 } from './security'
 import { loadSecureConfigs, applyEnvConfig } from './config-vault'
 
-// Get __dirname equivalent for ES modules
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+// Get finalized roots from environment (set by env-setup.ts)
+const RESOURCE_ROOT = process.env.APP_ROOT!
+const STORAGE_ROOT = process.env.STORAGE_ROOT!
 
-// The built directory structure
-//
-// ├─┬─┬ dist
-// │ │ └── index.html
-// │ │
-// │ ├─┬ dist-electron
-// │ │ ├── main.js
-// │ │ └── preload.mjs
-// │
-// Production path resolution:
-//   app.isPackaged = true  → APP_ROOT = process.resourcesPath (writable, outside asar)
-//   app.isPackaged = false → APP_ROOT = project root (parent of dist-electron/)
-process.env.APP_ROOT = app.isPackaged
-  ? process.resourcesPath                  // e.g. C:\Users\X\AppData\Local\MagicQC\resources
-  : path.join(__dirname, '..')             // project root in dev
-
-// 🚧 Use ['ENV_NAME'] avoid vite:define plugin - Vite@2.x
 export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
 
 // dist/ and dist-electron/ are INSIDE the asar archive in production.
-// Use app.getAppPath() to reference them (Electron can read asar transparently).
-// APP_ROOT is for writable runtime paths (logs, python-core, configs) outside asar.
 const ASAR_ROOT = app.getAppPath()           // resources/app.asar in prod, project root in dev
 export const MAIN_DIST = path.join(ASAR_ROOT, 'dist-electron')
 export const RENDERER_DIST = path.join(ASAR_ROOT, 'dist')
@@ -52,6 +34,7 @@ let win: BrowserWindow | null
 let pythonProcess: ChildProcess | null = null
 let pythonLogStream: fs.WriteStream | null = null
 let licenseValid = false   // Tracks whether hardware license passed
+const appState = { isQuitting: false } // Tracks application shutdown status
 
 // ══════════════════════════════════════════════════════════════
 //  SINGLE INSTANCE LOCK — prevent multiple copies running
@@ -71,7 +54,9 @@ app.on('second-instance', () => {
 
 // ── Security audit log ──────────────────────────────────────
 function securityLog(message: string): void {
-  const logDir = path.join(process.env.APP_ROOT!, 'runtime', 'logs')
+  // STORAGE_ROOT/logs is pre-created by the startup runtimeDirs block below.
+  // Never use STORAGE_ROOT/runtime/logs — that sub-path is not pre-created.
+  const logDir = path.join(process.env.STORAGE_ROOT!, 'logs')
   if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true })
   const logPath = path.join(logDir, 'security.log')
   const timestamp = new Date().toISOString()
@@ -87,9 +72,9 @@ function setupCSP(): void {
         'Content-Security-Policy': [
           isDev
             // Dev: permissive — Vite HMR needs inline scripts, eval, and WebSocket
-            ? "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws: wss: http://localhost:* http://127.0.0.1:*; img-src 'self' data: blob: https:; object-src 'none'"
-            // Prod: strict — no eval, no inline scripts, only local Python API
-            : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' http://localhost:* http://127.0.0.1:*; img-src 'self' data: blob:; object-src 'none'"
+            ? "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws: wss: http://localhost:* http://127.0.0.1:* https://magicqc.online; img-src 'self' data: blob: https:; object-src 'none'"
+            // Prod: strict — no eval, no inline scripts, allow MagicQC API
+            : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' http://localhost:* http://127.0.0.1:* https://magicqc.online; img-src 'self' data: blob:; object-src 'none'"
         ],
       },
     })
@@ -97,7 +82,15 @@ function setupCSP(): void {
 }
 
 // Start Python API server automatically
-async function startPythonServer(): Promise<boolean> {
+// Start Python API server automatically with auto-restart resilience
+async function startPythonServer(isRestart = false): Promise<boolean> {
+  if (isRestart) {
+    console.log('🔄 Attempting to restart Python engine...');
+    stopPythonServer();
+    // Wait briefly for port release
+    await new Promise(r => setTimeout(r, 1000));
+  }
+
   return new Promise((resolve) => {
     // Production: spawn compiled exe directly (no Python interpreter needed)
     // Dev:        spawn python interpreter with script path
@@ -106,35 +99,48 @@ async function startPythonServer(): Promise<boolean> {
 
     const spawnCmd = isDev ? 'python' : exePath
     const spawnArgs = isDev ? [scriptPath] : []
-    console.log(`🐍 Starting Python API server: ${spawnCmd} ${spawnArgs.join(' ')}`)
 
-    // Ensure logs directory exists and open a write-stream for Python output
-    const logsDir = path.join(process.env.APP_ROOT!, 'runtime', 'logs')
+    // Log absolute path to ensure alignment
+    console.log(`🐍 Starting Python API server [${isDev ? 'DEV' : 'PROD'}]: ${spawnCmd}`)
+    console.log(`   Resource Root (EXE): ${RESOURCE_ROOT}`)
+    console.log(`   Storage Root (CWD):  ${STORAGE_ROOT}`)
+
+    // Ensure logs directory exists at STORAGE_ROOT/logs
+    const logsDir = path.join(STORAGE_ROOT, 'logs')
     if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true })
     const logPath = path.join(logsDir, 'python_server.log')
+
     pythonLogStream = fs.createWriteStream(logPath, { flags: 'a' })
-    pythonLogStream.write(`\n${'='.repeat(60)}\n[${new Date().toISOString()}] Python server starting\n${'='.repeat(60)}\n`)
+    pythonLogStream.write(`\n${'='.repeat(60)}\n[${new Date().toISOString()}] Python server ${isRestart ? 'RESTARTING' : 'STARTING'}\n${'='.repeat(60)}\n`)
 
     try {
       // Spawn process – fully hidden, no console window for the operator.
-      // stdout/stderr are piped so we can write them to the log file.
+      // CWD is strictly set to STORAGE_ROOT for absolute path resolution.
       pythonProcess = spawn(spawnCmd, spawnArgs, {
-        cwd: process.env.APP_ROOT,
+        cwd: STORAGE_ROOT,
+        env: {
+          ...process.env,
+          // Explicitly pass storage root to Python for Results/Polling alignment
+          MAGICQC_STORAGE_ROOT: STORAGE_ROOT
+        },
         stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true, // Sets STARTF_USESHOWWINDOW + SW_HIDE on Windows
+        windowsHide: true,
         shell: false,
         detached: false
       })
 
-      // Drain stdout/stderr → log file (never shown to the operator)
+      // Drain stdout/stderr → log file
       pythonProcess.stdout?.on('data', (data: Buffer) => {
         const text = data.toString().trim()
         pythonLogStream?.write(`[OUT] ${text}\n`)
+        // Also log to console in dev
+        if (isDev) console.log(`[PyOUT] ${text}`)
       })
 
       pythonProcess.stderr?.on('data', (data: Buffer) => {
         const text = data.toString().trim()
         pythonLogStream?.write(`[ERR] ${text}\n`)
+        if (isDev) console.error(`[PyERR] ${text}`)
       })
 
       pythonProcess.on('error', (err) => {
@@ -145,14 +151,20 @@ async function startPythonServer(): Promise<boolean> {
         resolve(false)
       })
 
-      pythonProcess.on('exit', (code) => {
-        const msg = `🐍 Python server exited with code ${code}`
-        console.log(msg)
+      pythonProcess.on('exit', (code, signal) => {
+        const msg = `🐍 Python server exited (code: ${code}, signal: ${signal})`
+        console.warn(msg)
         pythonLogStream?.write(`${msg}\n`)
         pythonProcess = null
+
+        // Auto-restart logic for production resilience
+        if (!appState.isQuitting) {
+          console.log('🔄 Python core died unexpectedly — triggering auto-restart in 2s...');
+          setTimeout(() => startPythonServer(true), 2000);
+        }
       })
 
-      // Wait for server to be ready (check health endpoint)
+      // Wait for server to be ready
       waitForPythonServer().then(resolve)
     } catch (error) {
       console.error('❌ Error starting Python server:', error)
@@ -298,17 +310,44 @@ app.whenReady().then(async () => {
     // Set up Content Security Policy
     setupCSP()
 
-    // Ensure all runtime directories exist (critical for fresh installs)
-    // All writable dirs live under runtime/ — keeps app root clean
-    const runtimeBase = path.join(process.env.APP_ROOT!, 'runtime')
-    const runtimeDirs = ['logs', 'storage', 'temp_annotations', 'temp_measure', 'measurement_results', 'secure']
+    // Ensure all runtime directories exist directly under STORAGE_ROOT
+    // Anchored to the authoritative STORAGE_ROOT/storage structure.
+    const runtimeDirs = [
+      'logs',
+      'storage',
+      'storage/measurement_results',
+      'temp_annotations',
+      'temp_measure',
+      'secure'
+    ]
     for (const dir of runtimeDirs) {
-      const dirPath = path.join(runtimeBase, dir)
+      const dirPath = path.join(process.env.STORAGE_ROOT!, dir)
       if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, { recursive: true })
-        if (isDev) console.log(`📁 Created runtime directory: runtime/${dir}`)
+        if (isDev) console.log(`📁 Created authoritative directory: ${dir}`)
       }
     }
+
+    // Migrate default templates/configs if needed (first launch in a new STORAGE_ROOT)
+    const templates = [
+      '.env',
+      'camera_calibration.json',
+      'registration_config.json',
+      'measurement_config.json'
+    ]
+    for (const file of templates) {
+      const src = path.join(RESOURCE_ROOT, file)
+      const dest = path.join(STORAGE_ROOT, file)
+      if (fs.existsSync(src) && !fs.existsSync(dest)) {
+        try {
+          fs.copyFileSync(src, dest)
+          if (isDev) console.log(`🚚 Initialized storage with template: ${file}`)
+        } catch (e) {
+          console.error(`❌ Migration failed for ${file}:`, e)
+        }
+      }
+    }
+
 
     // ══════════════════════════════════════════════════════════════
     //  SECURITY GATES (production only — dev mode bypasses all)
@@ -399,8 +438,8 @@ app.whenReady().then(async () => {
       securityLog('PASS: Core binary exists')
 
       // ── Gate 8: Binary integrity (SHA-256 hash verification) ──
-      const hashStorePath = path.join(process.env.APP_ROOT!, 'runtime', 'secure')
-      const integrityCheck = checkBinaryIntegrity(exePath, hashStorePath)
+      const hashStorePath = path.join(process.env.STORAGE_ROOT!, 'secure')
+      const integrityCheck = checkBinaryIntegrity(exePath, hashStorePath, app.getVersion())
       if (!integrityCheck.safe) {
         securityLog(`BLOCKED: ${integrityCheck.reason}`)
         console.error(`🚫 ${integrityCheck.reason}`)
@@ -419,7 +458,7 @@ app.whenReady().then(async () => {
     // ── Secure config loading (encrypt on first run, decrypt to memory) ──
     if (!isDev) {
       try {
-        const configs = loadSecureConfigs(process.env.APP_ROOT!)
+        const configs = loadSecureConfigs(process.env.STORAGE_ROOT!)
         const envContent = configs.get('.env')
         if (envContent) {
           applyEnvConfig(envContent)
@@ -460,19 +499,20 @@ app.whenReady().then(async () => {
     // Create window (normal app)
     createWindow()
 
-    // ── Process heartbeat: auto-close if magicqc_core.exe dies (3s interval) ──
-    if (!isDev && pythonProcess) {
-      const heartbeatInterval = setInterval(() => {
+    // ── Process Monitoring: broadcast reconnection status to renderer ──
+    if (pythonProcess) {
+      const monitorInterval = setInterval(() => {
         if (!pythonProcess || pythonProcess.killed || pythonProcess.exitCode !== null) {
-          clearInterval(heartbeatInterval)
-          securityLog('INCIDENT: Python core process died unexpectedly')
-          console.error('💀 Python core process died unexpectedly — closing application')
-          app.quit()
+          // Send "Reconnecting" event to all windows
+          for (const win of BrowserWindow.getAllWindows()) {
+            win.webContents.send('python:status-changed', { status: 'reconnecting' })
+          }
         }
-      }, 3000)
-
-      // Clean up interval on app quit
-      app.on('before-quit', () => clearInterval(heartbeatInterval))
+      }, 2000)
+      app.on('before-quit', () => {
+        appState.isQuitting = true;
+        clearInterval(monitorInterval);
+      })
     }
   } catch (error) {
     console.error('Failed to start application:', error)
@@ -1033,7 +1073,10 @@ function setupMeasurementHandlers() {
     const path = await import('path')
     const fs = await import('fs')
 
-    const tempMeasureDir = path.join(process.env.APP_ROOT!, 'runtime', 'temp_measure')
+    // STORAGE_ROOT is always writable (userData fallback in prod).
+    // APP_ROOT (resourcesPath) is read-only in Program Files — never write there.
+    // temp_measure is pre-created under STORAGE_ROOT by the startup runtimeDirs block.
+    const tempMeasureDir = path.join(process.env.STORAGE_ROOT!, 'temp_measure')
 
     console.log('[MAIN] Saving files to temp_measure folder:', tempMeasureDir)
 

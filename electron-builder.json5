@@ -25,11 +25,22 @@
   ],
   "extraResources": [
     {
+      // FULL python-core/dist — includes magicqc_core.exe, all .pyd Cython binaries,
+      // and any satellite DLLs emitted beside the PyInstaller onefile EXE.
+      // NEVER filter to just the .exe — Cython .pyd files must travel with it.
       "from": "python-core/dist",
       "to": "python-core/dist",
-      "filter": ["magicqc_core.exe"]
+      "filter": [
+        "**/*",
+        "!**/__pycache__/**",
+        "!**/*.py",
+        "!**/*.spec",
+        "!**/build/**"
+      ]
     },
     {
+      // Runtime config templates — copied to resources/ so main.ts can
+      // migrate them to the writable STORAGE_ROOT on first launch.
       "from": ".",
       "to": ".",
       "filter": [
@@ -38,12 +49,11 @@
         "measurement_config.json",
         "registration_config.json"
       ]
-    },
-    {
-      "from": "storage",
-      "to": "runtime/storage",
-      "filter": ["**/*"]
     }
+    // NOTE: storage/ and logs/ directories are intentionally NOT bundled here.
+    // They are created at application startup by main.ts (runtimeDirs block)
+    // under the writable STORAGE_ROOT path (userData on Program Files installs).
+    // Bundling them would embed dev-time data and cause STORAGE_ROOT path mismatches.
   ],
   "win": {
     "icon": "public/icon.ico",
@@ -64,6 +74,8 @@
     "perMachine": true,
     "allowElevation": true,
     "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
     "deleteAppDataOnUninstall": false,
     "installerIcon": "public/icon.ico",
     "uninstallerIcon": "public/icon.ico",

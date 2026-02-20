@@ -24,8 +24,14 @@ if getattr(sys, 'frozen', False):
 else:
     _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Configuration — absolute path to calibration file
-CALIBRATION_FILE = os.path.join(_PROJECT_ROOT, 'camera_calibration.json')
+# STORAGE_ROOT is the writable root — always use this for writes.
+# In production installs to Program Files, PROJECT_ROOT is read-only.
+# Electron passes MAGICQC_STORAGE_ROOT so Python can write to the correct location.
+_STORAGE_ROOT = os.environ.get('MAGICQC_STORAGE_ROOT', _PROJECT_ROOT)
+
+# Configuration — calibration file must be in the WRITABLE storage root.
+# Electron migrates the template from resources/ to STORAGE_ROOT on first launch.
+CALIBRATION_FILE = os.path.join(_STORAGE_ROOT, 'camera_calibration.json')
 
 
 class CameraCalibrator:

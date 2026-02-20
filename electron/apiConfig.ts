@@ -13,18 +13,9 @@
  *   PYTHON_API_PORT   – port for the Python Flask measurement API         (default: 5000)
  */
 
-import dotenv from 'dotenv'
-import { fileURLToPath } from 'node:url'
-import path from 'node:path'
-
-// Load .env from APP_ROOT (set by main.ts before this module is imported)
-// In production: resources/.env  |  In dev: project root/.env
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-const envPath = process.env.APP_ROOT
-    ? path.resolve(process.env.APP_ROOT, '.env')
-    : path.resolve(__dirname, '..', '.env')
-dotenv.config({ path: envPath })
+// Note: .env is loaded by env-setup.ts which is imported in main.ts
+// No need to call dotenv.config() here as it is already handled.
+console.log(`[API Config] Initializing with: MAGICQC_API_URL=${process.env.MAGICQC_API_URL || 'DEFAULT'}`)
 
 // ─── MagicQC GraphQL API ─────────────────────────────────────────────────────
 /** GraphQL endpoint URL (e.g. https://magicqc.online/graphql) */

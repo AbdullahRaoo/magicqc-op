@@ -106,4 +106,9 @@ contextBridge.exposeInMainWorld('measurement', {
     image_height: number
     image_base64: string
   }) => ipcRenderer.invoke('measurement:saveTempFiles', data),
+  // Handle Python core status changes (e.g. reconnecting)
+  onStatusChanged: (callback: (event: any, data: { status: string }) => void) => {
+    ipcRenderer.on('python:status-changed', callback)
+    return () => ipcRenderer.removeListener('python:status-changed', callback)
+  },
 })

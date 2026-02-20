@@ -25,7 +25,10 @@ if getattr(sys, 'frozen', False):
 else:
     _CORE_DIR = os.path.dirname(os.path.abspath(__file__))
     PROJECT_ROOT = os.path.dirname(_CORE_DIR)
-LOG_DIR = os.path.join(PROJECT_ROOT, 'logs')
+
+# Support writable path redirection for Program Files installs
+STORAGE_ROOT = os.environ.get('MAGICQC_STORAGE_ROOT', PROJECT_ROOT)
+LOG_DIR = os.path.join(STORAGE_ROOT, 'logs')
 os.makedirs(LOG_DIR, exist_ok=True)
 
 

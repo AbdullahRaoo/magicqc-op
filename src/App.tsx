@@ -8,6 +8,7 @@ function AppContent() {
   const { operator, logout, isLoading } = useAuth()
   const [showSettings, setShowSettings] = useState(false)
   const [isCalibrating, setIsCalibrating] = useState(false)
+  const [isReconnecting, setIsReconnecting] = useState(false)
 
   // Calibration modal state
   const [showCalibrationModal, setShowCalibrationModal] = useState(false)
@@ -161,6 +162,40 @@ function AppContent() {
     }
   }
 
+  // Handle Python core status changes (auto-restart)
+  useEffect(() => {
+    if (!window.measurement?.onStatusChanged) return
+
+    const cleanup = window.measurement.onStatusChanged((_event, data: any) => {
+      if (data.status === 'reconnecting') {
+        setIsReconnecting(true)
+        console.warn('[SYSTEM] Python core disconnected — auto-restart initiated')
+      }
+    })
+
+    return () => cleanup()
+  }, [])
+
+  // Clear reconnecting state when server becomes responsive again
+  useEffect(() => {
+    if (!isReconnecting) return
+
+    const poll = async () => {
+      try {
+        const result = await window.measurement.getStatus()
+        if (result.status !== 'error' && result.running !== undefined) {
+          setIsReconnecting(false)
+          console.log('[SYSTEM] Python core reconnected successfully')
+        }
+      } catch {
+        // Still offline
+      }
+    }
+
+    const interval = setInterval(poll, 3000)
+    return () => clearInterval(interval)
+  }, [isReconnecting])
+
   // Close calibration modal and return to main UI
   const closeCalibrationModal = () => {
     setShowCalibrationModal(false)
@@ -186,7 +221,15 @@ function AppContent() {
   return (
     <div className="h-screen flex flex-col bg-surface overflow-hidden text-primary font-sans">
       {/* MagicQC Brand Header */}
-      <header className="bg-white border-b-2 border-slate-100 shrink-0 z-50 shadow-sm">
+      <header className="bg-white border-b-2 border-slate-100 shrink-0 z-50 shadow-sm relative">
+        {/* Reconnecting Banner */}
+        {isReconnecting && (
+          <div className="absolute top-0 left-0 right-0 bg-orange-500 text-white text-[11px] font-bold py-1 px-4 flex items-center justify-center gap-2 animate-pulse z-[60]">
+            <div className="w-2 h-2 bg-white rounded-full animate-ping"></div>
+            <span>RECONNECTING TO MEASUREMENT ENGINE... PLEASE WAIT</span>
+          </div>
+        )}
+
         <div className="w-full px-6 py-1 flex justify-between items-center">
           <div className="flex items-center space-x-4">
             <img src="/MagicQC logo.png" alt="MagicQC" className="h-16 bg-white brand-logo-bg rounded-xl px-3 py-1" />
@@ -533,8 +576,8 @@ function AppContent() {
                     onClick={handleUploadCalibration}
                     disabled={!uploadedCalibration || isUploading}
                     className={`w-full py-4 font-bold text-touch-lg rounded-xl transition-colors flex items-center justify-center gap-3 ${uploadedCalibration && !isUploading
-                        ? 'bg-primary text-white hover:bg-primary-dark'
-                        : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                      ? 'bg-primary text-white hover:bg-primary-dark'
+                      : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                       }`}
                   >
                     {isUploading ? (

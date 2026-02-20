@@ -1,47 +1,11 @@
 {
-    "annotation_name": "S",
-    "article_style": "11-A920",
-    "annotation_json_path": "D:\\RJM\\operatorPannel-main\\temp_annotations\\11-A920_S-b.json",
-    "reference_image_path": "D:\\RJM\\operatorPannel-main\\temp_annotations\\11-A920_S-b.jpg",
+    "annotation_name": "__validation__",
+    "article_style": "",
+    "annotation_json_path": "D:\\RJM\\operatorPannel-main\\temp_annotations\\__validation__.json",
+    "reference_image_path": null,
     "side": "front",
-    "garment_color": "black",
-    "laravel_storage": "D:\\RJM\\magicQC\\public\\storage",
+    "garment_color": "#ffffff",
+    "laravel_storage": "D:\\RJM\\operatorPannel-main\\storage",
     "results_path": "D:\\RJM\\operatorPannel-main\\storage\\measurement_results",
-    "measurement_specs": [
-        {
-            "index": 0,
-            "db_id": 110,
-            "code": "JD_H-05",
-            "name": "Waist Relaxed",
-            "expected_value": 28.5
-        },
-        {
-            "index": 1,
-            "db_id": 111,
-            "code": "JD_I-13",
-            "name": "LOW HIP(3`` UP From Crotch)",
-            "expected_value": 39.5
-        },
-        {
-            "index": 2,
-            "db_id": 112,
-            "code": "JD_k-10",
-            "name": "Thigh(1`` Below Crotch Point)",
-            "expected_value": 22.75
-        },
-        {
-            "index": 3,
-            "db_id": 113,
-            "code": "JD_k-30",
-            "name": "LEG Opening (Relaxed)",
-            "expected_value": 9.88
-        },
-        {
-            "index": 4,
-            "db_id": 114,
-            "code": "JD_A-32",
-            "name": "Inseam Length",
-            "expected_value": 29.5
-        }
-    ]
+    "measurement_specs": []
 }

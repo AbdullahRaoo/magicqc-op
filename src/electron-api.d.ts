@@ -110,7 +110,7 @@ interface MeasurementAPI {
         measurement_specs?: string;
     }) => Promise<{ status: string; message: string; data?: any }>
     stop: () => Promise<{ status: string; message: string }>
-    getStatus: () => Promise<{ status: string; data: any }>
+    getStatus: () => Promise<{ status: string; running?: boolean; data?: any }>
     getLiveResults: () => Promise<{ status: string; data: any; message?: string }>
     loadTestImage: (relativePath: string) => Promise<{ status: string; data?: string; message?: string }>
     startCalibration: () => Promise<{ status: string; message: string }>
@@ -137,6 +137,8 @@ interface MeasurementAPI {
         image_height: number
         image_base64: string
     }) => Promise<{ status: string; message: string; jsonPath?: string; imagePath?: string }>
+    // Handle status changes (auto-restart bridge)
+    onStatusChanged: (callback: (event: any, data: { status: 'connected' | 'reconnecting' | 'disconnected' }) => void) => () => void
 }
 
 interface IpcRenderer {

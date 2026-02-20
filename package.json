@@ -7,6 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
     "build:prod": "tsc && vite build && node scripts/obfuscate.cjs && electron-builder --win",
+    "build:production": "node scripts/build-production.mjs",
+    "build:production:prod": "node scripts/build-production.mjs --prod",
+    "validate-api": "node scripts/validate-api.mjs",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },

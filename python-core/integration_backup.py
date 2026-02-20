@@ -18,15 +18,13 @@ class LiveKeypointDistanceMeasurer:
         # Front side data
         self.reference_image = None
         self.reference_gray = None
-        self.keypoints = []  # Will store [x, y, type] where type is 'corner', 'perp', or 'normal'
-        self.keypoint_types = []  # List of types for each keypoint
+        self.keypoints = []
         self.transferred_keypoints = []
         
         # Back side data
         self.back_reference_image = None
         self.back_reference_gray = None
-        self.back_keypoints = []  # Will store [x, y, type]
-        self.back_keypoint_types = []
+        self.back_keypoints = []
         self.back_transferred_keypoints = []
         
         # Current side tracking
@@ -43,11 +41,7 @@ class LiveKeypointDistanceMeasurer:
         self.current_format = None
         self.last_measurements = []
         self.placement_box = []  # [x1, y1, x2, y2] for shirt placement guide
-        self.back_placement_box = []  # [x1, y1, x2, y2] for back side placement guide
-
-        # Diagnostic: call counter for periodic logging in save_live_measurements
-        self._save_live_call_count = 0
-
+        
         # NEW: Pause functionality
         self.paused = False
         self.pause_frame = None
@@ -84,9 +78,10 @@ class LiveKeypointDistanceMeasurer:
         self.last_valid_keypoints = []
         self.stabilization_frames = 0
         
-        # NEW: Perpendicular points static tracking
+        # NEW: Perpendicular points static tracking (points 13-14, 15-16, 17-18)
         self.perpendicular_points_initialized = False
-        self.perpendicular_points_static_map = {}  # Store static positions for perpendicular points
+        self.perpendicular_points_static = []  # Store static positions for perpendicular points
+        self.perpendicular_points_indices = [12, 13, 14, 15, 16, 17]  # 0-based indices for points 13-18
         
         # Performance optimization
         self.last_transfer_time = 0
@@ -118,8 +113,8 @@ class LiveKeypointDistanceMeasurer:
         self.measurement_box_height = 120
         self.measurement_box_width = 400
         
-        # Corner keypoint parameters
-        self.corner_keypoints_count = 12  # First 12 recommended as corner points
+        # Enhanced Corner keypoint parameters
+        self.corner_keypoints_count = 12
         self.corner_template_size = 150
         self.corner_matching_threshold = 0.6
         
@@ -127,9 +122,6 @@ class LiveKeypointDistanceMeasurer:
         self.mouse_dragging = False
         self.last_mouse_x = 0
         self.last_mouse_y = 0
-        
-        # Annotation mode
-        self.annotation_mode = 'normal'  # 'corner', 'perp', or 'normal'
 
     def load_calibration(self):
         """Load calibration data from JSON file"""
@@ -158,94 +150,106 @@ class LiveKeypointDistanceMeasurer:
             print(f"❌ Error loading calibration: {e}")
             return False
 
-    def save_calibration(self):
-        """Save calibration data to JSON file"""
-        try:
-            calibration_data = {
-                'pixels_per_cm': self.pixels_per_cm,
-                'reference_length_cm': self.reference_length_cm,
-                'is_calibrated': self.is_calibrated,
-                'calibration_date': str(np.datetime64('now'))
-            }
-            
-            with open(self.calibration_file, 'w') as f:
-                json.dump(calibration_data, f, indent=4)
-            
-            print("💾 Calibration saved successfully!")
-            return True
-            
-        except Exception as e:
-            print(f"❌ Error saving calibration: {e}")
-            return False
-
-    def save_reference_image(self):
-        """Save reference image to file"""
-        try:
-            if self.reference_image is not None:
-                success = cv2.imwrite(self.reference_image_file, self.reference_image)
-                if success:
-                    print(f"💾 Reference image saved: {self.reference_image_file}")
-                    return True
-                else:
-                    print("❌ Failed to save reference image")
-                    return False
-            else:
-                print("❌ No reference image to save")
-                return False
-        except Exception as e:
-            print(f"❌ Error saving reference image: {e}")
-            return False
-
-    def save_back_reference_image(self):
-        """Save back reference image to file"""
-        try:
-            if self.back_reference_image is not None:
-                success = cv2.imwrite(self.back_reference_image_file, self.back_reference_image)
-                if success:
-                    print(f"💾 Back reference image saved: {self.back_reference_image_file}")
-                    return True
-                else:
-                    print("❌ Failed to save back reference image")
-                    return False
-        except Exception as e:
-            print(f"❌ Error saving back reference image: {e}")
-            return False
-
     def load_reference_image(self):
-        """Load reference image from file"""
+        """Load reference image from file with robust fallback"""
         try:
-            if os.path.exists(self.reference_image_file):
-                self.reference_image = cv2.imread(self.reference_image_file)
-                if self.reference_image is not None:
-                    self.reference_gray = cv2.cvtColor(self.reference_image, cv2.COLOR_BGR2GRAY)
-                    print(f"✅ Reference image loaded: {self.reference_image_file}")
-                    print(f"📐 Image dimensions: {self.reference_image.shape[1]}x{self.reference_image.shape[0]}")
-                    return True
-                else:
-                    print("❌ Failed to load reference image")
-                    return False
+            abs_path = os.path.abspath(self.reference_image_file)
+            print(f"[IMG] Attempting to load reference image: {abs_path}")
+            
+            if not os.path.exists(abs_path):
+                print(f"📁 No reference image file found at: {abs_path}")
+                return False
+            
+            file_size = os.path.getsize(abs_path)
+            print(f"[IMG] File exists, size: {file_size} bytes")
+            
+            if file_size == 0:
+                print("❌ Reference image file is empty (0 bytes)")
+                return False
+            
+            # Primary: try cv2.imread with absolute path
+            self.reference_image = cv2.imread(abs_path)
+            
+            # Fallback: if imread fails, try loading via numpy buffer (handles path encoding issues)
+            if self.reference_image is None:
+                print("[IMG] cv2.imread returned None, trying numpy buffer fallback...")
+                with open(abs_path, 'rb') as f:
+                    raw_bytes = f.read()
+                
+                # Check for data URL prefix corruption (garbage bytes before image header)
+                # JPEG starts with FF D8, PNG starts with 89 50 4E 47
+                jpeg_marker = raw_bytes.find(b'\xff\xd8')
+                png_marker = raw_bytes.find(b'\x89PNG')
+                
+                if jpeg_marker > 0:
+                    print(f"[IMG] Found JPEG header at byte offset {jpeg_marker} (expected 0) - trimming {jpeg_marker} garbage bytes")
+                    raw_bytes = raw_bytes[jpeg_marker:]
+                elif png_marker > 0:
+                    print(f"[IMG] Found PNG header at byte offset {png_marker} (expected 0) - trimming {png_marker} garbage bytes")
+                    raw_bytes = raw_bytes[png_marker:]
+                
+                nparr = np.frombuffer(raw_bytes, np.uint8)
+                self.reference_image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            
+            if self.reference_image is not None:
+                self.reference_gray = cv2.cvtColor(self.reference_image, cv2.COLOR_BGR2GRAY)
+                print(f"✅ Reference image loaded: {abs_path}")
+                print(f"📐 Image dimensions: {self.reference_image.shape[1]}x{self.reference_image.shape[0]}")
+                return True
             else:
-                print("📁 No reference image file found")
+                # Log header bytes for debugging
+                with open(abs_path, 'rb') as f:
+                    header = f.read(32)
+                print(f"❌ Failed to load reference image (OpenCV cannot decode)")
+                print(f"[DEBUG] First 32 bytes (hex): {header.hex()}")
                 return False
         except Exception as e:
             print(f"❌ Error loading reference image: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def load_back_reference_image(self):
-        """Load back reference image from file"""
+        """Load back reference image from file with robust fallback"""
         try:
-            if os.path.exists(self.back_reference_image_file):
-                self.back_reference_image = cv2.imread(self.back_reference_image_file)
-                if self.back_reference_image is not None:
-                    self.back_reference_gray = cv2.cvtColor(self.back_reference_image, cv2.COLOR_BGR2GRAY)
-                    print(f"✅ Back reference image loaded: {self.back_reference_image_file}")
-                    print(f"📐 Image dimensions: {self.back_reference_image.shape[1]}x{self.back_reference_image.shape[0]}")
-                    return True
-                else:
-                    print("❌ Failed to load back reference image")
-                    return False
+            abs_path = os.path.abspath(self.back_reference_image_file)
+            print(f"[IMG] Attempting to load back reference image: {abs_path}")
+            
+            if not os.path.exists(abs_path):
+                print(f"📁 No back reference image file found at: {abs_path}")
+                return False
+            
+            file_size = os.path.getsize(abs_path)
+            if file_size == 0:
+                print("❌ Back reference image file is empty (0 bytes)")
+                return False
+            
+            # Primary: try cv2.imread with absolute path
+            self.back_reference_image = cv2.imread(abs_path)
+            
+            # Fallback: numpy buffer load
+            if self.back_reference_image is None:
+                print("[IMG] cv2.imread returned None for back image, trying numpy buffer fallback...")
+                with open(abs_path, 'rb') as f:
+                    raw_bytes = f.read()
+                
+                jpeg_marker = raw_bytes.find(b'\xff\xd8')
+                png_marker = raw_bytes.find(b'\x89PNG')
+                if jpeg_marker > 0:
+                    raw_bytes = raw_bytes[jpeg_marker:]
+                elif png_marker > 0:
+                    raw_bytes = raw_bytes[png_marker:]
+                
+                nparr = np.frombuffer(raw_bytes, np.uint8)
+                self.back_reference_image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            
+            if self.back_reference_image is not None:
+                self.back_reference_gray = cv2.cvtColor(self.back_reference_image, cv2.COLOR_BGR2GRAY)
+                print(f"✅ Back reference image loaded: {abs_path}")
+                print(f"📐 Image dimensions: {self.back_reference_image.shape[1]}x{self.back_reference_image.shape[0]}")
+                return True
             else:
-                print("📁 No back reference image file found")
+                print("❌ Failed to load back reference image")
                 return False
         except Exception as e:
             print(f"❌ Error loading back reference image: {e}")
@@ -258,35 +262,7 @@ class LiveKeypointDistanceMeasurer:
                 with open(self.annotation_file, 'r') as f:
                     annotation_data = json.load(f)
                 
-                # Load keypoints with types
-                keypoints_data = annotation_data.get('keypoints', [])
-                self.keypoints = []
-                self.keypoint_types = []
-                
-                for kp_data in keypoints_data:
-                    if len(kp_data) == 3:
-                        # Format: [x, y, type]
-                        self.keypoints.append([kp_data[0], kp_data[1]])
-                        self.keypoint_types.append(kp_data[2])
-                    else:
-                        # Legacy format: [x, y] - assume normal type
-                        self.keypoints.append([kp_data[0], kp_data[1]])
-                        self.keypoint_types.append('normal')
-                
-                # Legacy type inference: if ALL keypoints defaulted to 'normal'
-                # (no type info in annotation), infer types by position:
-                # first 12 → corner, next 6 → perp, rest → normal
-                if len(self.keypoint_types) > 0 and all(t == 'normal' for t in self.keypoint_types):
-                    has_any_typed = any(len(kp_data) == 3 for kp_data in keypoints_data)
-                    if not has_any_typed:
-                        for i in range(len(self.keypoint_types)):
-                            if i < 12:
-                                self.keypoint_types[i] = 'corner'
-                            elif i < 18:
-                                self.keypoint_types[i] = 'perp'
-                            # else: stays 'normal'
-                        print(f"[COMPAT] Applied legacy type inference: {sum(1 for t in self.keypoint_types if t == 'corner')} corner, {sum(1 for t in self.keypoint_types if t == 'perp')} perp, {sum(1 for t in self.keypoint_types if t == 'normal')} normal")
-                
+                self.keypoints = annotation_data.get('keypoints', [])
                 self.target_distances = annotation_data.get('target_distances', {})
                 self.placement_box = annotation_data.get('placement_box', [])
                 
@@ -295,13 +271,7 @@ class LiveKeypointDistanceMeasurer:
                 
                 if self.keypoints:
                     print("✅ Annotation data loaded successfully!")
-                    corner_count = sum(1 for t in self.keypoint_types if t == 'corner')
-                    perp_count = sum(1 for t in self.keypoint_types if t == 'perp')
-                    normal_count = sum(1 for t in self.keypoint_types if t == 'normal')
-                    print(f"📍 Loaded {len(self.keypoints)} keypoints:")
-                    print(f"   - Corner: {corner_count}")
-                    print(f"   - Perpendicular: {perp_count}")
-                    print(f"   - Normal: {normal_count}")
+                    print(f"📍 Loaded {len(self.keypoints)} keypoints")
                     print(f"🎯 Loaded {len(self.target_distances)} target distances")
                     if self.placement_box:
                         print(f"📦 Loaded placement guide box")
@@ -329,52 +299,16 @@ class LiveKeypointDistanceMeasurer:
                 with open(self.back_annotation_file, 'r') as f:
                     annotation_data = json.load(f)
                 
-                # Load keypoints with types
-                keypoints_data = annotation_data.get('keypoints', [])
-                self.back_keypoints = []
-                self.back_keypoint_types = []
-                
-                for kp_data in keypoints_data:
-                    if len(kp_data) == 3:
-                        # Format: [x, y, type]
-                        self.back_keypoints.append([kp_data[0], kp_data[1]])
-                        self.back_keypoint_types.append(kp_data[2])
-                    else:
-                        # Legacy format: [x, y] - assume normal type
-                        self.back_keypoints.append([kp_data[0], kp_data[1]])
-                        self.back_keypoint_types.append('normal')
-                
-                # Legacy type inference for back annotations
-                if len(self.back_keypoint_types) > 0 and all(t == 'normal' for t in self.back_keypoint_types):
-                    has_any_typed = any(len(kp_data) == 3 for kp_data in keypoints_data)
-                    if not has_any_typed:
-                        for i in range(len(self.back_keypoint_types)):
-                            if i < 12:
-                                self.back_keypoint_types[i] = 'corner'
-                            elif i < 18:
-                                self.back_keypoint_types[i] = 'perp'
-                        print(f"[COMPAT] Applied legacy type inference (back): {sum(1 for t in self.back_keypoint_types if t == 'corner')} corner, {sum(1 for t in self.back_keypoint_types if t == 'perp')} perp, {sum(1 for t in self.back_keypoint_types if t == 'normal')} normal")
-                
+                self.back_keypoints = annotation_data.get('keypoints', [])
                 self.back_target_distances = annotation_data.get('target_distances', {})
-                self.back_placement_box = annotation_data.get('placement_box', [])
                 
                 # Convert string keys to integers for target_distances
                 self.back_target_distances = {int(k): float(v) for k, v in self.back_target_distances.items()}
                 
                 if self.back_keypoints:
                     print("✅ Back annotation data loaded successfully!")
-                    corner_count = sum(1 for t in self.back_keypoint_types if t == 'corner')
-                    perp_count = sum(1 for t in self.back_keypoint_types if t == 'perp')
-                    normal_count = sum(1 for t in self.back_keypoint_types if t == 'normal')
-                    print(f"📍 Loaded {len(self.back_keypoints)} back keypoints:")
-                    print(f"   - Corner: {corner_count}")
-                    print(f"   - Perpendicular: {perp_count}")
-                    print(f"   - Normal: {normal_count}")
+                    print(f"📍 Loaded {len(self.back_keypoints)} back keypoints")
                     print(f"🎯 Loaded {len(self.back_target_distances)} back target distances")
-                    if self.back_placement_box and len(self.back_placement_box) == 4:
-                        print(f"📦 Loaded back placement_box: {self.back_placement_box}")
-                    elif self.back_keypoints and (not self.back_placement_box or len(self.back_placement_box) != 4):
-                        print(f"[BACK] Back annotation has {len(self.back_keypoints)} keypoints but placement_box missing or invalid: {self.back_placement_box}")
                     
                     if self.load_back_reference_image():
                         return True
@@ -382,7 +316,7 @@ class LiveKeypointDistanceMeasurer:
                         print("❌ Back annotation loaded but reference image missing")
                         return False
                 else:
-                    print("❌ Back annotation file exists but no keypoints")
+                    print("❌ Back annotation file exists but has no keypoints")
                     return False
             else:
                 print("📁 No back annotation file found")
@@ -390,86 +324,6 @@ class LiveKeypointDistanceMeasurer:
                 
         except Exception as e:
             print(f"❌ Error loading back annotation: {e}")
-            return False
-
-    def save_annotation(self):
-        """Save annotation data to JSON file and reference image"""
-        try:
-            # Prepare keypoints with types
-            keypoints_data = []
-            for i, point in enumerate(self.keypoints):
-                point_type = self.keypoint_types[i] if i < len(self.keypoint_types) else 'normal'
-                keypoints_data.append([point[0], point[1], point_type])
-            
-            annotation_data = {
-                'keypoints': keypoints_data,
-                'target_distances': self.target_distances,
-                'placement_box': getattr(self, 'placement_box', []),
-                'annotation_date': str(np.datetime64('now'))
-            }
-            
-            with open(self.annotation_file, 'w') as f:
-                json.dump(annotation_data, f, indent=4)
-            
-            print("💾 Annotation data saved successfully!")
-            corner_count = sum(1 for t in self.keypoint_types if t == 'corner')
-            perp_count = sum(1 for t in self.keypoint_types if t == 'perp')
-            normal_count = sum(1 for t in self.keypoint_types if t == 'normal')
-            print(f"📍 Saved {len(self.keypoints)} keypoints:")
-            print(f"   - Corner: {corner_count}")
-            print(f"   - Perpendicular: {perp_count}")
-            print(f"   - Normal: {normal_count}")
-            print(f"🎯 Saved {len(self.target_distances)} target distances")
-            if hasattr(self, 'placement_box') and self.placement_box:
-                print(f"📦 Saved placement guide box")
-            
-            if self.save_reference_image():
-                return True
-            else:
-                print("❌ Annotation saved but reference image save failed")
-                return False
-            
-        except Exception as e:
-            print(f"❌ Error saving annotation: {e}")
-            return False
-
-    def save_back_annotation(self):
-        """Save back annotation data to JSON file and reference image"""
-        try:
-            # Prepare keypoints with types
-            keypoints_data = []
-            for i, point in enumerate(self.back_keypoints):
-                point_type = self.back_keypoint_types[i] if i < len(self.back_keypoint_types) else 'normal'
-                keypoints_data.append([point[0], point[1], point_type])
-            
-            annotation_data = {
-                'keypoints': keypoints_data,
-                'target_distances': self.back_target_distances,
-                'placement_box': getattr(self, 'back_placement_box', []),
-                'annotation_date': str(np.datetime64('now'))
-            }
-            
-            with open(self.back_annotation_file, 'w') as f:
-                json.dump(annotation_data, f, indent=4)
-            
-            print("💾 Back annotation data saved successfully!")
-            corner_count = sum(1 for t in self.back_keypoint_types if t == 'corner')
-            perp_count = sum(1 for t in self.back_keypoint_types if t == 'perp')
-            normal_count = sum(1 for t in self.back_keypoint_types if t == 'normal')
-            print(f"📍 Saved {len(self.back_keypoints)} back keypoints:")
-            print(f"   - Corner: {corner_count}")
-            print(f"   - Perpendicular: {perp_count}")
-            print(f"   - Normal: {normal_count}")
-            print(f"🎯 Saved {len(self.back_target_distances)} back target distances")
-            
-            if self.save_back_reference_image():
-                return True
-            else:
-                print("❌ Back annotation saved but reference image save failed")
-                return False
-            
-        except Exception as e:
-            print(f"❌ Error saving back annotation: {e}")
             return False
 
     def delete_calibration(self):
@@ -514,9 +368,7 @@ class LiveKeypointDistanceMeasurer:
                 print("🗑️ Back reference image deleted successfully!")
             
             self.keypoints = []
-            self.keypoint_types = []
             self.back_keypoints = []
-            self.back_keypoint_types = []
             self.target_distances = {}
             self.back_target_distances = {}
             self.reference_image = None
@@ -556,11 +408,11 @@ class LiveKeypointDistanceMeasurer:
             
             if headless:
                 # In headless mode, garment_color should already be set via set_garment_color()
-                print("[HEADLESS] Skipping interactive garment color prompt")
-                if self.gain_set:
-                    self.set_camera_gain_for_capture()
+                print(f"[HEADLESS] Using garment color: {self.garment_color}")
+                self.gain_set = True
+                self.set_camera_gain_for_capture()
             else:
-                # UPDATED: Ask for garment color with White option BEFORE any image capture
+                # Interactive mode: ask user for garment color
                 self.ask_garment_color()
             
             return True
@@ -595,7 +447,7 @@ class LiveKeypointDistanceMeasurer:
         print("W - White/Light colored garment (Gain: 20, Auto Exposure: ON)")
         print("B - Black/Dark colored garment (Gain: 150, Auto Exposure: OFF)")
         print("Z - Other colors (Gain: 64, Auto Exposure: ON)")
-        print("\nThis gain setting will be applied to ALL captured images (calibration, annotation, live measurement).")
+        print("\nThis gain setting will be applied to ALL captured images (calibration, live measurement).")
         
         while True:
             choice = input("\nEnter your choice (W/B/Z): ").strip().upper()
@@ -724,26 +576,6 @@ class LiveKeypointDistanceMeasurer:
                 CameraSetAeState(self.camera_obj.hCamera, 1)  # Auto Exposure ON for other colors
                 print("🎛️ Gain set to 64, Auto Exposure ON for OTHER colors (live measurement)")
 
-    def capture_reference_frame(self):
-        """Capture a reference frame from camera"""
-        frame = self.camera_obj.grab()
-        if frame is not None:
-            self.reference_image = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
-            self.reference_gray = frame.copy()
-            print(f"Reference frame captured: {self.reference_image.shape[1]}x{self.reference_image.shape[0]}")
-            return True
-        return False
-
-    def capture_back_reference_frame(self):
-        """Capture a back reference frame from camera"""
-        frame = self.camera_obj.grab()
-        if frame is not None:
-            self.back_reference_image = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
-            self.back_reference_gray = frame.copy()
-            print(f"Back reference frame captured: {self.back_reference_image.shape[1]}x{self.back_reference_image.shape[0]}")
-            return True
-        return False
-
     def capture_live_frame(self):
         """Capture a live frame from camera - returns grayscale for processing"""
         frame = self.camera_obj.grab()
@@ -843,9 +675,9 @@ class LiveKeypointDistanceMeasurer:
             
             det = np.linalg.det(H)
             if 0.1 < abs(det) < 10.0:
+                transformed_points = []
                 current_keypoints = self.keypoints if self.current_side == 'front' else self.back_keypoints
                 
-                transformed_points = []
                 for point in current_keypoints:
                     src_point = np.array([[point[0], point[1]]], dtype=np.float32)
                     src_point = src_point.reshape(-1, 1, 2)
@@ -1008,11 +840,10 @@ class LiveKeypointDistanceMeasurer:
         
         return transferred_points
 
-    def template_match_corners(self, current_gray, scale_factor=1.0, corner_indices=None):
+    def template_match_corners(self, current_gray, scale_factor=1.0):
         """Enhanced template matching specifically for corner keypoints"""
         current_reference_gray = self.reference_gray if self.current_side == 'front' else self.back_reference_gray
         current_keypoints = self.keypoints if self.current_side == 'front' else self.back_keypoints
-        current_keypoint_types = self.keypoint_types if self.current_side == 'front' else self.back_keypoint_types
         
         if current_reference_gray is None or len(current_keypoints) == 0:
             return []
@@ -1022,19 +853,8 @@ class LiveKeypointDistanceMeasurer:
         
         corner_points = []
         
-        # Process only corner keypoints
-        indices_to_process = corner_indices if corner_indices is not None else range(len(current_keypoints))
-        
-        for i in indices_to_process:
-            if i >= len(current_keypoints):
-                corner_points.append([-1, -1])
-                continue
-                
-            # Only process if it's a corner point
-            if current_keypoint_types[i] != 'corner':
-                corner_points.append([-1, -1])
-                continue
-                
+        # Process only corner keypoints (first 12)
+        for i in range(min(self.corner_keypoints_count, len(current_keypoints))):
             keypoint = current_keypoints[i]
             x, y = int(keypoint[0]), int(keypoint[1])
             
@@ -1099,34 +919,22 @@ class LiveKeypointDistanceMeasurer:
         
         return corner_points
 
-    def detect_corners_robust(self, current_gray, scale_factor=1.0, corner_indices=None):
+    def detect_corners_robust(self, current_gray, scale_factor=1.0):
         """ENHANCED: Robust corner detection using multiple methods including Shi-Tomasi"""
         current_keypoints = self.keypoints if self.current_side == 'front' else self.back_keypoints
-        current_keypoint_types = self.keypoint_types if self.current_side == 'front' else self.back_keypoint_types
         
-        if len(current_keypoints) == 0:
+        if len(current_keypoints) < min(self.corner_keypoints_count, len(current_keypoints)):
             return []
             
         h, w = current_gray.shape[:2]
         
-        indices_to_process = corner_indices if corner_indices is not None else range(len(current_keypoints))
-        
         # Method 1: Enhanced template matching for corners
-        template_points = self.template_match_corners(current_gray, scale_factor, indices_to_process)
+        template_points = self.template_match_corners(current_gray, scale_factor)
         
         # Method 2: Shi-Tomasi corner detection
         shitomasi_points = []
         
-        for idx, i in enumerate(indices_to_process):
-            if i >= len(current_keypoints):
-                shitomasi_points.append([-1, -1])
-                continue
-                
-            # Only process if it's a corner point
-            if current_keypoint_types[i] != 'corner':
-                shitomasi_points.append([-1, -1])
-                continue
-                
+        for i in range(min(self.corner_keypoints_count, len(current_keypoints))):
             keypoint = current_keypoints[i]
             x, y = int(keypoint[0] * scale_factor), int(keypoint[1] * scale_factor)
             
@@ -1161,16 +969,7 @@ class LiveKeypointDistanceMeasurer:
         # Method 3: Harris corner detection (fallback)
         harris_points = []
         
-        for idx, i in enumerate(indices_to_process):
-            if i >= len(current_keypoints):
-                harris_points.append([-1, -1])
-                continue
-                
-            # Only process if it's a corner point
-            if current_keypoint_types[i] != 'corner':
-                harris_points.append([-1, -1])
-                continue
-                
+        for i in range(min(self.corner_keypoints_count, len(current_keypoints))):
             keypoint = current_keypoints[i]
             x, y = int(keypoint[0] * scale_factor), int(keypoint[1] * scale_factor)
             
@@ -1221,7 +1020,6 @@ class LiveKeypointDistanceMeasurer:
         """Robust keypoint transfer using multiple methods with grayscale processing"""
         current_reference_gray = self.reference_gray if self.current_side == 'front' else self.back_reference_gray
         current_keypoints = self.keypoints if self.current_side == 'front' else self.back_keypoints
-        current_keypoint_types = self.keypoint_types if self.current_side == 'front' else self.back_keypoint_types
         
         if current_reference_gray is None or len(current_keypoints) == 0:
             return []
@@ -1261,29 +1059,21 @@ class LiveKeypointDistanceMeasurer:
             # METHOD 2: Template matching with adaptive scale
             template_points = self.template_match_keypoints(current_gray, scale_factor)
             
-            # METHOD 3: Enhanced corner detection for corner keypoints
-            corner_indices = [i for i, t in enumerate(current_keypoint_types) if t == 'corner']
-            corner_points = self.detect_corners_robust(current_gray, scale_factor, corner_indices)
+            # METHOD 3: Enhanced corner detection for first 12 keypoints
+            corner_points = self.detect_corners_robust(current_gray, scale_factor)
             
-            # METHOD 4: Perpendicular points handling (if they should be static)
-            perp_indices = [i for i, t in enumerate(current_keypoint_types) if t == 'perp']
-            
-            # METHOD 5: Fusion of all methods based on point type
+            # METHOD 4: Fusion of all methods
             fused_points = []
             valid_feature_count = 0
             valid_template_count = 0
             valid_corner_count = 0
-            corner_idx_counter = 0
             
             for i in range(len(current_keypoints)):
-                point_type = current_keypoint_types[i] if i < len(current_keypoint_types) else 'normal'
-                
                 feat_pt = feature_points[i] if i < len(feature_points) else [-1, -1]
                 temp_pt = template_points[i] if i < len(template_points) else [-1, -1]
                 
-                if point_type == 'corner' and corner_idx_counter < len(corner_points):
-                    corner_pt = corner_points[corner_idx_counter]
-                    corner_idx_counter += 1
+                if i < self.corner_keypoints_count and i < len(corner_points):
+                    corner_pt = corner_points[i]
                     
                     if feat_pt[0] != -1:
                         valid_feature_count += 1
@@ -1292,7 +1082,6 @@ class LiveKeypointDistanceMeasurer:
                     if corner_pt[0] != -1:
                         valid_corner_count += 1
                     
-                    # For corner points, prioritize corner detection methods
                     if corner_pt[0] != -1:
                         fused_points.append(corner_pt)
                     elif feat_pt[0] != -1:
@@ -1301,21 +1090,7 @@ class LiveKeypointDistanceMeasurer:
                         fused_points.append(temp_pt)
                     else:
                         fused_points.append([-1, -1])
-                        
-                elif point_type == 'perp':
-                    # For perpendicular points, use static positions if initialized
-                    if self.perpendicular_points_initialized and i in self.perpendicular_points_static_map:
-                        fused_points.append(self.perpendicular_points_static_map[i])
-                    else:
-                        # Otherwise use feature-based or template matching
-                        if feat_pt[0] != -1:
-                            fused_points.append(feat_pt)
-                        elif temp_pt[0] != -1:
-                            fused_points.append(temp_pt)
-                        else:
-                            fused_points.append([-1, -1])
-                            
-                else:  # normal points
+                else:
                     if feat_pt[0] != -1:
                         valid_feature_count += 1
                     if temp_pt[0] != -1:
@@ -1343,29 +1118,10 @@ class LiveKeypointDistanceMeasurer:
                         fused_points.append([-1, -1])
             
             if len(matches) >= self.min_matches:
-                print(f"📊 Transfer: {len(matches)} matches, {valid_feature_count}/{len(current_keypoints)} feature points, {valid_template_count}/{len(current_keypoints)} template points, {valid_corner_count}/{len(corner_indices)} corner points")
+                print(f"📊 Transfer: {len(matches)} matches, {valid_feature_count}/{len(current_keypoints)} feature points, {valid_template_count}/{len(current_keypoints)} template points, {valid_corner_count}/{min(self.corner_keypoints_count, len(current_keypoints))} corner points")
             
             # Apply stabilization to fused points
             stabilized_points = self.stabilize_keypoints(fused_points)
-            
-            # Initialize perpendicular points static map after first successful transfer
-            if not self.perpendicular_points_initialized and len(stabilized_points) >= 18:
-                perp_found = [i for i, t in enumerate(current_keypoint_types) if t == 'perp']
-                if perp_found:
-                    static_map = {}
-                    valid_perp = True
-                    
-                    for idx in perp_found:
-                        if idx < len(stabilized_points) and stabilized_points[idx][0] != -1:
-                            static_map[idx] = stabilized_points[idx].copy()
-                        else:
-                            valid_perp = False
-                            break
-                    
-                    if valid_perp:
-                        self.perpendicular_points_static_map = static_map
-                        self.perpendicular_points_initialized = True
-                        print(f"📏 Perpendicular points now STATIC: {perp_found}")
             
             return stabilized_points
             
@@ -1381,10 +1137,12 @@ class LiveKeypointDistanceMeasurer:
         
         # Check if perpendicular points should be static
         if self.perpendicular_points_initialized:
-            # Ensure perpendicular points stay static
-            for idx, static_pt in self.perpendicular_points_static_map.items():
-                if idx < len(new_keypoints):
-                    new_keypoints[idx] = static_pt
+            # Ensure perpendicular points stay static (move only on first frame after successful match)
+            for idx in self.perpendicular_points_indices:
+                if idx < len(new_keypoints) and idx < len(self.perpendicular_points_static):
+                    if new_keypoints[idx][0] != -1 and new_keypoints[idx][1] != -1:
+                        # Always use the static position, never update from new_keypoints
+                        new_keypoints[idx] = self.perpendicular_points_static[idx]
         
         stabilized_points = []
         valid_count = 0
@@ -1393,9 +1151,9 @@ class LiveKeypointDistanceMeasurer:
             if new_point[0] == -1 or new_point[1] == -1:
                 stabilized_points.append(last_point)
             else:
-                # Check if this is a perpendicular point (already handled above)
-                if self.perpendicular_points_initialized and i in self.perpendicular_points_static_map:
-                    stabilized_points.append(new_point)
+                # For perpendicular points, use static positions (already handled above)
+                if self.perpendicular_points_initialized and i in self.perpendicular_points_indices:
+                    stabilized_points.append(new_point)  # Already set to static position
                     valid_count += 1
                     continue
                 
@@ -1548,17 +1306,19 @@ class LiveKeypointDistanceMeasurer:
         return int(orig_x), int(orig_y)
 
     def check_qc(self, pair_num, measured_distance):
-        """Check if measurement passes QC tolerance.
-        In headless mode, if target distance is not set, auto-pass (no interactive prompts).
-        Returns True if PASS, False if FAIL. Results stored in self.qc_results.
-        """
+        """Check if measurement passes QC tolerance"""
         current_target_distances = self.target_distances if self.current_side == 'front' else self.back_target_distances
         
         if pair_num not in current_target_distances:
-            # No target distance available — auto-pass (no blocking input in headless mode)
-            print(f"[QC] No target distance for Pair {pair_num}, auto-passing")
-            self.qc_results[pair_num] = "PASS"
-            return True
+            try:
+                target = float(input(f"Enter target distance for Pair {pair_num} (cm): "))
+                current_target_distances[pair_num] = target
+                print(f"✅ Target distance for Pair {pair_num} set to {target} cm")
+                return True
+            except ValueError:
+                print("❌ Invalid input! Using measured distance as target.")
+                current_target_distances[pair_num] = measured_distance
+                return True
         
         target_distance = current_target_distances[pair_num]
         tolerance = self.qc_tolerance_cm
@@ -1755,15 +1515,11 @@ class LiveKeypointDistanceMeasurer:
                    (200, 200, 255), 2)
 
     def draw_placement_guide(self, display_frame):
-        """Draw the placement guide box on live feed. Uses front or back placement_box based on current_side."""
-        if self.current_side == 'back':
-            box = getattr(self, 'back_placement_box', [])
-        else:
-            box = getattr(self, 'placement_box', [])
-        if not box or len(box) != 4:
+        """Draw the placement guide box on live feed"""
+        if not hasattr(self, 'placement_box') or not self.placement_box or len(self.placement_box) != 4:
             return
         
-        x1, y1, x2, y2 = box
+        x1, y1, x2, y2 = self.placement_box
         disp_p1 = self.original_to_zoomed_coords(x1, y1, display_frame.shape)
         disp_p2 = self.original_to_zoomed_coords(x2, y2, display_frame.shape)
         
@@ -1783,9 +1539,9 @@ class LiveKeypointDistanceMeasurer:
                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
 
     def show_startup_menu(self):
-        """Show startup menu for calibration and annotation options"""
+        """Simplified startup menu - only load existing files"""
         print("\n" + "="*60)
-        print("STARTUP MENU")
+        print("STARTUP - LOADING EXISTING FILES")
         print("="*60)
         
         calibration_exists = os.path.exists(self.calibration_file)
@@ -1815,26 +1571,20 @@ class LiveKeypointDistanceMeasurer:
             print("❌ Back Annotation: Not available")
         
         print("\nOptions:")
-        print("1. Use previous calibration & annotation")
-        print("2. Create new calibration")
-        print("3. Create new annotation (Front)") 
-        print("4. Create new annotation (Back)")
-        print("5. Create new calibration AND annotation (Front)")
-        print("6. Create new calibration AND annotation (Back)")
-        print("7. Check current status")
-        print("8. Delete all data and start fresh")
-        print("9. Exit")
+        print("1. Load calibration & annotation and start measurement")
+        print("2. Check current status")
+        print("3. Exit")
         
         while True:
-            choice = input("\nEnter your choice (1-9): ").strip()
+            choice = input("\nEnter your choice (1-3): ").strip()
             
             if choice == '1':
                 cal_loaded = self.load_calibration()
                 front_loaded = self.load_annotation()
                 back_loaded = self.load_back_annotation()
                 
-                if cal_loaded and (front_loaded or back_loaded):
-                    print("✅ Successfully loaded previous data!")
+                if front_loaded or back_loaded:
+                    print("✅ Successfully loaded existing data!")
                     if front_loaded:
                         print(f"📐 Front image: {self.reference_image.shape[1]}x{self.reference_image.shape[0]}")
                         print(f"📍 Front keypoints: {len(self.keypoints)}")
@@ -1845,106 +1595,24 @@ class LiveKeypointDistanceMeasurer:
                         print(f"📦 Placement guide box: Available")
                     return True
                 else:
-                    if not cal_loaded:
-                        print("❌ Failed to load calibration. Please create new calibration.")
-                    if not front_loaded and not back_loaded:
-                        print("❌ Failed to load annotation. Please create new annotation.")
-                    continue
+                    print("❌ No valid annotation files found. Please ensure annotation files exist.")
+                    return False
                     
             elif choice == '2':
-                if self.calibrate_with_object():
-                    self.save_calibration()
-                    front_loaded = self.load_annotation()
-                    back_loaded = self.load_back_annotation()
-                    if not front_loaded and not back_loaded:
-                        print("📝 No annotation found. Please create annotation next.")
-                    return True
-                return False
-                
-            elif choice == '3':
-                if self.load_calibration():
-                    if self.annotate_measurement_points('front'):
-                        add_box = input("Do you want to add a placement guide box for shirt positioning? (y/n): ").strip().lower()
-                        if add_box == 'y' or add_box == 'yes':
-                            if self.annotate_placement_guide_box():
-                                print("✅ Placement guide box added!")
-                        self.save_annotation()
-                        return True
-                else:
-                    print("❌ Calibration required before annotation!")
-                    continue
-                return False
-                
-            elif choice == '4':
-                if self.load_calibration():
-                    if self.annotate_measurement_points('back'):
-                        self.save_back_annotation()
-                        return True
-                else:
-                    print("❌ Calibration required before annotation!")
-                    continue
-                return False
-                
-            elif choice == '5':
-                if self.calibrate_with_object():
-                    self.save_calibration()
-                    if self.annotate_measurement_points('front'):
-                        add_box = input("Do you want to add a placement guide box for shirt positioning? (y/n): ").strip().lower()
-                        if add_box == 'y' or add_box == 'yes':
-                            if self.annotate_placement_guide_box():
-                                print("✅ Placement guide box added!")
-                        self.save_annotation()
-                        return True
-                return False
-                
-            elif choice == '6':
-                if self.calibrate_with_object():
-                    self.save_calibration()
-                    if self.annotate_measurement_points('back'):
-                        self.save_back_annotation()
-                        return True
-                return False
-                
-            elif choice == '7':
-                cal_status = "Available" if os.path.exists(self.calibration_file) else "Not available"
-                front_ann_status = "Available" if os.path.exists(self.annotation_file) else "Not available"
-                back_ann_status = "Available" if os.path.exists(self.back_annotation_file) else "Not available"
-                front_img_status = "Available" if os.path.exists(self.reference_image_file) else "Not available"
-                back_img_status = "Available" if os.path.exists(self.back_reference_image_file) else "Not available"
                 print(f"\n📊 Current Status:")
-                print(f"📏 Calibration: {cal_status}")
-                print(f"📍 Front Annotation: {front_ann_status}")
-                print(f"📍 Back Annotation: {back_ann_status}")
-                print(f"🖼️  Front Reference Image: {front_img_status}")
-                print(f"🖼️  Back Reference Image: {back_img_status}")
+                print(f"📏 Calibration: {'Available' if calibration_exists else 'Not available'}")
+                print(f"📍 Front Annotation: {'Available' if annotation_exists else 'Not available'}")
+                print(f"📍 Back Annotation: {'Available' if back_annotation_exists else 'Not available'}")
+                print(f"🖼️  Front Reference Image: {'Available' if reference_image_exists else 'Not available'}")
+                print(f"🖼️  Back Reference Image: {'Available' if back_reference_image_exists else 'Not available'}")
                 continue
                 
-            elif choice == '8':
-                self.delete_calibration()
-                self.delete_annotation()
-                print("🗑️ All data deleted. Starting fresh...")
-                if self.calibrate_with_object():
-                    side = input("Create annotation for (f)ront or (b)ack? ").strip().lower()
-                    if side == 'f' or side == 'front':
-                        if self.annotate_measurement_points('front'):
-                            add_box = input("Do you want to add a placement guide box for shirt positioning? (y/n): ").strip().lower()
-                            if add_box == 'y' or add_box == 'yes':
-                                if self.annotate_placement_guide_box():
-                                    print("✅ Placement guide box added!")
-                            self.save_annotation()
-                            return True
-                    elif side == 'b' or side == 'back':
-                        if self.annotate_measurement_points('back'):
-                            self.save_back_annotation()
-                            return True
-                return False
-                
-            elif choice == '9':
+            elif choice == '3':
                 print("👋 Exiting...")
                 return False
                 
             else:
-                print("❌ Invalid choice! Please enter 1-9")
+                print("❌ Invalid choice! Please enter 1-3")
 
     def calibrate_with_object(self):
         """Step 1: Calibrate using a known size object"""
@@ -1958,7 +1626,10 @@ class LiveKeypointDistanceMeasurer:
         calibration_captured = False
         for attempt in range(max_attempts):
             print(f"Calibration capture attempt {attempt + 1}/{max_attempts}...")
-            if self.capture_reference_frame():
+            frame = self.capture_live_frame()
+            if frame is not None:
+                self.reference_image = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+                self.reference_gray = frame.copy()
                 calibration_captured = True
                 break
             print(f"Attempt {attempt + 1} failed, retrying...")
@@ -2119,467 +1790,12 @@ class LiveKeypointDistanceMeasurer:
         cv2.imshow(window_name, temp_img)
         cv2.waitKey(3000)
 
-    def annotate_measurement_points(self, side='front'):
-        """Step 2: Annotate points for measurement for front or back with type selection"""
-        print("\n" + "="*60)
-        print(f"STEP 2: {side.upper()} ANNOTATION")
-        print("="*60)
-        
-        self.current_side = side
-        self.annotation_mode = 'normal'  # Start with normal mode
-        
-        if side == 'front':
-            if self.reference_image is None:
-                print("❌ No reference image available. Capturing one now...")
-                if not self.capture_reference_frame():
-                    print("❌ Failed to capture reference frame!")
-                    return False
-            current_image = self.reference_image
-            keypoints_list = self.keypoints
-            keypoint_types_list = self.keypoint_types
-        else:
-            if self.back_reference_image is None:
-                print("❌ No back reference image available. Capturing one now...")
-                if not self.capture_back_reference_frame():
-                    print("❌ Failed to capture back reference frame!")
-                    return False
-            current_image = self.back_reference_image
-            keypoints_list = self.back_keypoints
-            keypoint_types_list = self.back_keypoint_types
-        
-        print(f"Now mark the points you want to measure in the {side} live feed.")
-        print("Points will be measured in pairs: 1-2, 3-4, 5-6, etc.")
-        print("\n📌 ANNOTATION MODES (press key before clicking):")
-        print("   C - CORNER point (press C key, then click) - Enhanced feature extraction")
-        print("   P - PERPENDICULAR point (press P key, then click) - 90° alignment, static tracking")
-        print("   N - NORMAL point (press N key, then click) - Basic feature extraction")
-        print("   I - Clear last point (press I key)")
-        print("\nCurrent mode shown in window title. Points are color-coded:")
-        print("   🟡 Yellow - CORNER points")
-        print("   🟣 Purple - PERPENDICULAR points") 
-        print("   🟢 Green - NORMAL points")
-        
-        self.zoom_factor = 1.0
-        self.zoom_center = None
-        self.pan_x = 0
-        self.pan_y = 0
-        
-        image_copy = current_image.copy()
-        temp_keypoints = []  # Temporary list for [x, y]
-        temp_keypoint_types = []  # Temporary list for types
-        
-        def redraw_annotation(img, points, point_types):
-            """Redraw all annotation points on image"""
-            img[:] = current_image.copy()
-            if self.zoom_factor > 1.0:
-                img[:] = self.apply_zoom(img)
-            
-            for i, point in enumerate(points):
-                disp_x, disp_y = self.original_to_zoomed_coords(point[0], point[1], img.shape)
-                point_type = point_types[i] if i < len(point_types) else 'normal'
-                
-                if point_type == 'corner':
-                    color = (0, 255, 255)  # Yellow
-                    type_letter = "C"
-                elif point_type == 'perp':
-                    color = (255, 0, 255)  # Purple
-                    type_letter = "P"
-                else:  # normal
-                    color = (0, 255, 0)    # Green
-                    type_letter = "N"
-                
-                cv2.circle(img, (disp_x, disp_y), 8, color, -1)
-                cv2.circle(img, (disp_x, disp_y), 12, (0, 0, 255), 2)
-                cv2.putText(img, f"{i+1}({type_letter})", 
-                           (disp_x + 15, disp_y - 15), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
-                
-                # Draw lines between odd-even pairs
-                if i % 2 == 0 and i+1 < len(points):
-                    disp_p2 = self.original_to_zoomed_coords(points[i+1][0], points[i+1][1], img.shape)
-                    cv2.line(img, (disp_x, disp_y), disp_p2, (255, 255, 255), 1)
-        
-        def annotation_mouse_callback(event, x, y, flags, param):
-            nonlocal image_copy, temp_keypoints, temp_keypoint_types
-            
-            orig_x, orig_y = self.zoomed_to_original_coords(x, y, image_copy.shape)
-            
-            if event == cv2.EVENT_LBUTTONDOWN:
-                # Add point with current annotation mode
-                temp_keypoints.append([orig_x, orig_y])
-                temp_keypoint_types.append(self.annotation_mode)
-                redraw_annotation(image_copy, temp_keypoints, temp_keypoint_types)
-                print(f"✅ Point {len(temp_keypoints)} placed as {self.annotation_mode.upper()} at ({orig_x}, {orig_y})")
-                
-            elif event == cv2.EVENT_RBUTTONDOWN:
-                if temp_keypoints:
-                    # Find nearest point to remove
-                    min_dist = float('inf')
-                    nearest_idx = -1
-                    for i, point in enumerate(temp_keypoints):
-                        dist = math.sqrt((point[0] - orig_x)**2 + (point[1] - orig_y)**2)
-                        if dist < min_dist:
-                            min_dist = dist
-                            nearest_idx = i
-                    
-                    if min_dist < 50:
-                        removed_point = temp_keypoints.pop(nearest_idx)
-                        removed_type = temp_keypoint_types.pop(nearest_idx)
-                        redraw_annotation(image_copy, temp_keypoints, temp_keypoint_types)
-                        print(f"❌ Removed point {nearest_idx+1} ({removed_type.upper()})")
-        
-        window_name = f"{side.upper()} Annotation - Mode: {self.annotation_mode.upper()} (Press H for help)"
-        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-        cv2.setMouseCallback(window_name, annotation_mouse_callback)
-        
-        redraw_annotation(image_copy, temp_keypoints, temp_keypoint_types)
-        self.show_annotation_instructions(image_copy, window_name, side)
-        
-        print(f"\n{side.capitalize()} annotation window opened. Select mode and mark points.")
-        
-        while True:
-            cv2.imshow(window_name, image_copy)
-            key = cv2.waitKey(1) & 0xFF
-            
-            # Mode selection keys
-            if key == ord('c') or key == ord('C'):
-                self.annotation_mode = 'corner'
-                cv2.setWindowTitle(window_name, f"{side.upper()} Annotation - Mode: CORNER (Press H for help)")
-                print("🔧 Switched to CORNER mode - Points will have enhanced feature extraction")
-                
-            elif key == ord('p') or key == ord('P'):
-                self.annotation_mode = 'perp'
-                cv2.setWindowTitle(window_name, f"{side.upper()} Annotation - Mode: PERPENDICULAR (Press H for help)")
-                print("📏 Switched to PERPENDICULAR mode - Points will be 90° aligned and static during tracking")
-                
-            elif key == ord('n') or key == ord('N'):
-                self.annotation_mode = 'normal'
-                cv2.setWindowTitle(window_name, f"{side.upper()} Annotation - Mode: NORMAL (Press H for help)")
-                print("📍 Switched to NORMAL mode - Basic feature extraction")
-                
-            elif key == ord('i') or key == ord('I'):
-                # Clear last point
-                if temp_keypoints:
-                    removed_point = temp_keypoints.pop()
-                    removed_type = temp_keypoint_types.pop()
-                    redraw_annotation(image_copy, temp_keypoints, temp_keypoint_types)
-                    print(f"🗑️ Cleared last point ({removed_type.upper()}) - Total points: {len(temp_keypoints)}")
-                else:
-                    print("📭 No points to clear")
-                
-            elif key == ord('s') or key == ord('S'):
-                if len(temp_keypoints) >= 2:
-                    if side == 'front':
-                        self.keypoints = temp_keypoints
-                        self.keypoint_types = temp_keypoint_types
-                    else:
-                        self.back_keypoints = temp_keypoints
-                        self.back_keypoint_types = temp_keypoint_types
-                    
-                    corner_count = sum(1 for t in temp_keypoint_types if t == 'corner')
-                    perp_count = sum(1 for t in temp_keypoint_types if t == 'perp')
-                    normal_count = sum(1 for t in temp_keypoint_types if t == 'normal')
-                    
-                    print(f"✅ {side.capitalize()} annotation completed with {len(temp_keypoints)} keypoints")
-                    print(f"   - Corner: {corner_count}")
-                    print(f"   - Perpendicular: {perp_count}")
-                    print(f"   - Normal: {normal_count}")
-                    break
-                else:
-                    print("❌ Need at least 2 keypoints for measurement!")
-                    
-            elif key == ord('z') or key == ord('Z'):
-                self.zoom_factor *= 1.2
-                redraw_annotation(image_copy, temp_keypoints, temp_keypoint_types)
-                print(f"Zoom: {self.zoom_factor:.1f}x")
-                
-            elif key == ord('x') or key == ord('X'):
-                self.zoom_factor = max(1.0, self.zoom_factor / 1.2)
-                redraw_annotation(image_copy, temp_keypoints, temp_keypoint_types)
-                print(f"Zoom: {self.zoom_factor:.1f}x")
-                
-            elif key == ord('r') or key == ord('R'):
-                self.zoom_factor = 1.0
-                self.zoom_center = None
-                self.pan_x = 0
-                self.pan_y = 0
-                redraw_annotation(image_copy, temp_keypoints, temp_keypoint_types)
-                print("Zoom reset")
-                
-            elif key == 81:
-                self.pan_x -= 30
-                redraw_annotation(image_copy, temp_keypoints, temp_keypoint_types)
-                print(f"Pan left: {self.pan_x}")
-            elif key == 83:
-                self.pan_x += 30
-                redraw_annotation(image_copy, temp_keypoints, temp_keypoint_types)
-                print(f"Pan right: {self.pan_x}")
-            elif key == 82:
-                self.pan_y -= 30
-                redraw_annotation(image_copy, temp_keypoints, temp_keypoint_types)
-                print(f"Pan up: {self.pan_y}")
-            elif key == 84:
-                self.pan_y += 30
-                redraw_annotation(image_copy, temp_keypoints, temp_keypoint_types)
-                print(f"Pan down: {self.pan_y}")
-                    
-            elif key == ord('h') or key == ord('H'):
-                self.show_annotation_instructions(image_copy, window_name, side)
-                    
-            elif key == ord('q') or key == ord('Q'):
-                print(f"{side.capitalize()} annotation cancelled")
-                cv2.destroyAllWindows()
-                return False
-        
-        cv2.destroyAllWindows()
-        return True
-
-    def show_annotation_instructions(self, image, window_name, side='front'):
-        """Display annotation instructions on image"""
-        instructions = [
-            f"{side.upper()} ANNOTATION CONTROLS:",
-            "Select mode FIRST, then click:",
-            "C - Switch to CORNER mode (Yellow)",
-            "P - Switch to PERPENDICULAR mode (Purple)",
-            "N - Switch to NORMAL mode (Green)",
-            "I - Clear last point",
-            "",
-            "Left Click - Place point (in current mode)",
-            "Right Click - Remove nearest point", 
-            "Z - Zoom in",
-            "X - Zoom out",
-            "R - Reset zoom",
-            "Arrow Keys - Pan",
-            "S - Save and Continue",
-            "H - Show this help",
-            "Q - Quit without saving",
-            "",
-            "POINT TYPES:",
-            "CORNER (C) - Enhanced feature extraction",
-            "PERPENDICULAR (P) - 90° alignment, static tracking",
-            "NORMAL (N) - Basic feature extraction"
-        ]
-        
-        temp_img = image.copy()
-        for i, instruction in enumerate(instructions):
-            cv2.putText(temp_img, instruction, (10, 30 + i*25), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 3)
-            cv2.putText(temp_img, instruction, (10, 30 + i*25), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        
-        cv2.imshow(window_name, temp_img)
-        cv2.waitKey(5000)
-
-    def annotate_placement_guide_box(self):
-        """Step 2.5: Annotate placement guide box for accurate shirt positioning"""
-        print("\n" + "="*60)
-        print("STEP 2.5: PLACEMENT GUIDE BOX ANNOTATION")
-        print("="*60)
-        print("Draw a rectangle around the area where the shirt should be placed.")
-        print("This will help you position the shirt accurately for measurements.")
-        
-        if self.reference_image is None:
-            print("❌ No reference image available!")
-            return False
-        
-        self.zoom_factor = 1.0
-        self.zoom_center = None
-        self.pan_x = 0
-        self.pan_y = 0
-        
-        image_copy = self.reference_image.copy()
-        self.placement_box = []
-        drawing = False
-        temp_box = []
-        
-        def redraw_box_annotation(img, start_point, current_point, final=False):
-            img[:] = self.reference_image.copy()
-            if self.zoom_factor > 1.0:
-                img[:] = self.apply_zoom(img)
-            
-            disp_start = self.original_to_zoomed_coords(start_point[0], start_point[1], img.shape)
-            disp_current = self.original_to_zoomed_coords(current_point[0], current_point[1], img.shape)
-            
-            if final:
-                cv2.rectangle(img, (disp_start[0], disp_start[1]), 
-                             (disp_current[0], disp_current[1]), 
-                             (0, 255, 255), 4)
-                
-                overlay = img.copy()
-                cv2.rectangle(overlay, (disp_start[0], disp_start[1]), 
-                             (disp_current[0], disp_current[1]), 
-                             (0, 255, 255), -1)
-                cv2.addWeighted(overlay, 0.2, img, 0.8, 0, img)
-                
-                text = "SHIRT PLACEMENT GUIDE"
-                text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1.0, 3)[0]
-                text_x = (disp_start[0] + disp_current[0] - text_size[0]) // 2
-                text_y = (disp_start[1] + disp_current[1] + text_size[1]) // 2
-                
-                cv2.putText(img, text, (text_x, text_y), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 5)
-                cv2.putText(img, text, (text_x, text_y), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
-            else:
-                cv2.rectangle(img, (disp_start[0], disp_start[1]), 
-                             (disp_current[0], disp_current[1]), 
-                             (255, 0, 0), 2)
-        
-        def box_mouse_callback(event, x, y, flags, param):
-            nonlocal image_copy, drawing, temp_box
-            
-            orig_x, orig_y = self.zoomed_to_original_coords(x, y, image_copy.shape)
-            
-            if event == cv2.EVENT_LBUTTONDOWN:
-                drawing = True
-                temp_box = [[orig_x, orig_y]]
-                print(f"Box started at ({orig_x}, {orig_y})")
-                
-            elif event == cv2.EVENT_MOUSEMOVE:
-                if drawing and len(temp_box) == 1:
-                    temp_current = [orig_x, orig_y]
-                    redraw_box_annotation(image_copy, temp_box[0], temp_current)
-                    
-            elif event == cv2.EVENT_LBUTTONUP:
-                if drawing and len(temp_box) == 1:
-                    drawing = False
-                    self.placement_box = [temp_box[0][0], temp_box[0][1], orig_x, orig_y]
-                    print(f"Box completed: ({self.placement_box[0]}, {self.placement_box[1]}) to ({self.placement_box[2]}, {self.placement_box[3]})")
-                    redraw_box_annotation(image_copy, temp_box[0], [orig_x, orig_y], final=True)
-        
-        window_name = "Placement Guide - Draw box for shirt positioning (Press H for help)"
-        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-        cv2.setMouseCallback(window_name, box_mouse_callback)
-        
-        image_copy[:] = self.reference_image.copy()
-        if self.zoom_factor > 1.0:
-            image_copy[:] = self.apply_zoom(image_copy)
-        self.show_box_instructions(image_copy, window_name)
-        
-        print("Placement guide window opened. Draw a rectangle for shirt positioning.")
-        
-        while True:
-            cv2.imshow(window_name, image_copy)
-            key = cv2.waitKey(1) & 0xFF
-            
-            if key == ord('s') or key == ord('S'):
-                if len(self.placement_box) == 4:
-                    x1, y1, x2, y2 = self.placement_box
-                    self.placement_box = [
-                        min(x1, x2), min(y1, y2),
-                        max(x1, x2), max(y1, y2)
-                    ]
-                    print(f"✅ Placement guide box saved!")
-                    print(f"📦 Box coordinates: ({self.placement_box[0]}, {self.placement_box[1]}) to ({self.placement_box[2]}, {self.placement_box[3]})")
-                    break
-                else:
-                    print("❌ Please draw a box first!")
-                    
-            elif key == ord('c') or key == ord('C'):
-                self.placement_box = []
-                temp_box = []
-                drawing = False
-                image_copy[:] = self.reference_image.copy()
-                if self.zoom_factor > 1.0:
-                    image_copy[:] = self.apply_zoom(image_copy)
-                print("Box cleared")
-                
-            elif key == ord('z') or key == ord('Z'):
-                self.zoom_factor *= 1.2
-                redraw_box_annotation(image_copy, temp_box[0] if temp_box else [0,0], 
-                                     temp_box[0] if temp_box else [0,0], 
-                                     final=len(self.placement_box)==4)
-                print(f"Zoom: {self.zoom_factor:.1f}x")
-                
-            elif key == ord('x') or key == ord('X'):
-                self.zoom_factor = max(1.0, self.zoom_factor / 1.2)
-                redraw_box_annotation(image_copy, temp_box[0] if temp_box else [0,0], 
-                                     temp_box[0] if temp_box else [0,0], 
-                                     final=len(self.placement_box)==4)
-                print(f"Zoom: {self.zoom_factor:.1f}x")
-                
-            elif key == ord('r') or key == ord('R'):
-                self.zoom_factor = 1.0
-                self.zoom_center = None
-                self.pan_x = 0
-                self.pan_y = 0
-                redraw_box_annotation(image_copy, temp_box[0] if temp_box else [0,0], 
-                                     temp_box[0] if temp_box else [0,0], 
-                                     final=len(self.placement_box)==4)
-                print("Zoom reset")
-                
-            elif key == 81:
-                self.pan_x -= 30
-                redraw_box_annotation(image_copy, temp_box[0] if temp_box else [0,0], 
-                                     temp_box[0] if temp_box else [0,0], 
-                                     final=len(self.placement_box)==4)
-                print(f"Pan left: {self.pan_x}")
-            elif key == 83:
-                self.pan_x += 30
-                redraw_box_annotation(image_copy, temp_box[0] if temp_box else [0,0], 
-                                     temp_box[0] if temp_box else [0,0], 
-                                     final=len(self.placement_box)==4)
-                print(f"Pan right: {self.pan_x}")
-            elif key == 82:
-                self.pan_y -= 30
-                redraw_box_annotation(image_copy, temp_box[0] if temp_box else [0,0], 
-                                     temp_box[0] if temp_box else [0,0], 
-                                     final=len(self.placement_box)==4)
-                print(f"Pan up: {self.pan_y}")
-            elif key == 84:
-                self.pan_y += 30
-                redraw_box_annotation(image_copy, temp_box[0] if temp_box else [0,0], 
-                                     temp_box[0] if temp_box else [0,0], 
-                                     final=len(self.placement_box)==4)
-                print(f"Pan down: {self.pan_y}")
-                    
-            elif key == ord('h') or key == ord('H'):
-                self.show_box_instructions(image_copy, window_name)
-                    
-            elif key == ord('q') or key == ord('Q'):
-                print("Placement guide annotation cancelled")
-                self.placement_box = []
-                cv2.destroyAllWindows()
-                return False
-        
-        cv2.destroyAllWindows()
-        return True
-
-    def show_box_instructions(self, image, window_name):
-        """Display box annotation instructions on image"""
-        instructions = [
-            "PLACEMENT GUIDE CONTROLS:",
-            "Click & Drag - Draw placement box",
-            "Z - Zoom in",
-            "X - Zoom out", 
-            "R - Reset zoom",
-            "Arrow Keys - Pan (Left/Right/Up/Down)",
-            "C - Clear box",
-            "S - Save and Continue",
-            "H - Show this help",
-            "Q - Quit without saving",
-            "",
-            "Draw a box around where the shirt",
-            "should be placed for accurate measurements"
-        ]
-        
-        temp_img = image.copy()
-        for i, instruction in enumerate(instructions):
-            cv2.putText(temp_img, instruction, (10, 30 + i*25), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 3)
-            cv2.putText(temp_img, instruction, (10, 30 + i*25), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        
-        cv2.imshow(window_name, temp_img)
-        cv2.waitKey(3000)
-
     def display_measurements_on_terminal(self, measurements):
-        """Display measurements in terminal with detailed QC info"""
+        """Display measurements in terminal"""
         print("\n" + "="*50)
         print(f"LIVE {self.current_side.upper()} MEASUREMENTS")
         print("="*50)
-        for i, measurement in enumerate(measurements):
-            pair_num, distance_cm, distance_px, qc_result = measurement[:4]
+        for i, (pair_num, distance_cm, distance_px, qc_result) in enumerate(measurements):
             if self.is_calibrated:
                 current_target_distances = self.target_distances if self.current_side == 'front' else self.back_target_distances
                 target = current_target_distances.get(pair_num, "Not set")
@@ -2588,168 +1804,6 @@ class LiveKeypointDistanceMeasurer:
             else:
                 print(f"Pair {pair_num}: {distance_px:.1f} pixels")
         print("="*50)
-
-    def save_live_measurements(self, measurements, annotation_name=None):
-        """Save current live measurements to JSON file for Operator Panel UI access.
-        Uses RESULTS_PATH when set by worker so API and worker read/write the same file.
-        Merges self.last_measurements before fallback so valid values are never overwritten by 0.0.
-        CRITICAL: results_path must be absolute (set by measurement_worker from config) to avoid CWD issues."""
-        try:
-            # Use config results_path (RESULTS_PATH) when set by measurement_worker for API alignment
-            # CRITICAL: Ensure absolute path - worker sets this from config which uses os.path.abspath(RESULTS_PATH)
-            results_dir = getattr(self, 'results_path', 'measurement_results')
-            # Ensure absolute path (defensive: if somehow relative, resolve relative to PROJECT_ROOT)
-            if not os.path.isabs(results_dir):
-                import sys
-                if getattr(sys, 'frozen', False):
-                    exe_path = os.path.abspath(sys.executable)
-                    exe_dir = os.path.dirname(exe_path)
-                    # Handle nested dist/ layout (consistent with core_main.py)
-                    if os.path.basename(exe_dir) == 'dist':
-                        parent = os.path.dirname(exe_dir)
-                        if os.path.basename(parent) == 'python-core':
-                            project_root = os.path.dirname(parent)
-                        else:
-                            project_root = parent
-                    elif os.path.basename(exe_dir) == 'python-core':
-                        project_root = os.path.dirname(exe_dir)
-                    else:
-                        project_root = exe_dir
-                else:
-                    # Dev mode fallback
-                    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                
-                # Default to storage/measurement_results (production standard)
-                if results_dir == 'measurement_results':
-                    results_dir = os.path.join('storage', results_dir)
-                
-                results_dir = os.path.abspath(os.path.join(project_root, results_dir))
-            
-            os.makedirs(results_dir, exist_ok=True)
-            
-            # File path resolution
-            results_file = os.path.join(results_dir, 'live_measurements.json')
-            temp_file = results_file + '.tmp'
-            
-            # Get measurement_specs passed from UI via worker config
-            specs = getattr(self, 'measurement_specs', []) or []
-            
-            measurement_data = {
-                'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S'),
-                'annotation_name': annotation_name or getattr(self, 'current_annotation_name', 'unknown'),
-                'side': self.current_side,
-                'is_calibrated': self.is_calibrated,
-                'pixels_per_cm': self.pixels_per_cm,
-                'tolerance_cm': self.qc_tolerance_cm,
-                'garment_color': self.garment_color,
-                'measurements': [],
-                'results_path': results_file # For verification
-            }
-            
-            # Build measured_by_pair from current frame only
-            measured_by_pair = {}
-            for measurement in measurements:
-                pair_num, real_distance, pixel_distance, qc_passed = measurement[:4]
-                is_fallback = measurement[4] if len(measurement) >= 5 else False
-                measured_by_pair[pair_num] = {
-                    'real_distance': real_distance,
-                    'pixel_distance': pixel_distance,
-                    'qc_passed': qc_passed,
-                    'is_fallback': is_fallback,
-                    'from_current_frame': True
-                }
-            
-            # Merge self.last_measurements BEFORE fallback: preserve valid values so we never overwrite with 0.0
-            last = getattr(self, 'last_measurements', []) or []
-            for m in last:
-                if len(m) < 4:
-                    continue
-                pn, real_dist, px_dist, qc = m[:4]
-                if real_dist is not None and real_dist > 0 and pn not in measured_by_pair:
-                    measured_by_pair[pn] = {
-                        'real_distance': real_dist,
-                        'pixel_distance': px_dist,
-                        'qc_passed': qc,
-                        'is_fallback': True,
-                        'from_current_frame': False
-                    }
-            
-            # Determine total pairs: max of specs count and highest measured pair_num
-            max_pairs = max(
-                len(specs),
-                max(measured_by_pair.keys()) if measured_by_pair else 0
-            )
-            
-            # Produce spec-aligned output: only use 0.0 when pair has NEVER been measured
-            for pair_num in range(1, max_pairs + 1):
-                spec_index = pair_num - 1
-                spec = specs[spec_index] if spec_index < len(specs) else None
-                
-                if pair_num in measured_by_pair:
-                    m = measured_by_pair[pair_num]
-                    real_distance = m['real_distance']
-                    pixel_distance = m['pixel_distance']
-                    qc_passed = m['qc_passed']
-                    is_fallback = m['is_fallback']
-                else:
-                    # Pair never measured — emit null (per user request) so UI shows empty
-                    real_distance = None
-                    pixel_distance = 0.0
-                    qc_passed = False
-                    is_fallback = True
-                
-                # Only populated actual_cm for real measurements; null for fallback/missing
-                actual_cm_out = round(real_distance, 2) if real_distance is not None else None
-                
-                entry = {
-                    'id': pair_num,
-                    'name': spec.get('name', f'Measurement {pair_num}') if spec else f'Measurement {pair_num}',
-                    'spec_id': spec.get('db_id') if spec else None,
-                    'spec_code': spec.get('code') if spec else None,
-                    'actual_cm': actual_cm_out,
-                    'pixel_distance': round(pixel_distance, 2),
-                    'expected_value': spec.get('expected_value') if spec else None,
-                    # Strictly use spec tolerances, default to 1.0 (production alignment)
-                    'tolerance_plus': spec.get('tol_plus', 1.0) if spec else 1.0,
-                    'tolerance_minus': spec.get('tol_minus', 1.0) if spec else 1.0,
-                    'qc_passed': qc_passed,
-                    'is_fallback': is_fallback
-                }
-                measurement_data['measurements'].append(entry)
-
-            # Atomic write to avoid partial reads by API
-            try:
-                with open(temp_file, 'w') as f:
-                    json.dump(measurement_data, f, indent=2)
-                os.replace(temp_file, results_file)
-            except (IOError, OSError) as e:
-                print(f"[ERR] Failed to save live measurements (atomic): {e}")
-                # Fallback to direct write if replace fails
-                with open(results_file, 'w') as f:
-                    json.dump(measurement_data, f, indent=2)
-
-            # Ensure the file is at the final absolute path (log for debugging)
-            if not getattr(self, '_save_path_logged', False):
-                print(f"[PATH] Authoritative results path: {os.path.abspath(results_file)}")
-                self._save_path_logged = True
-            
-            # Diagnostic: every 30 calls log path, pair mapping, source, side; explicitly call out LEG Opening and Inseam
-            self._save_live_call_count = getattr(self, '_save_live_call_count', 0) + 1
-            if self._save_live_call_count % 30 == 1:
-                print(f"[LIVE] Write path: {live_file_abs} | side={self.current_side}")
-                for e in measurement_data['measurements']:
-                    m = measured_by_pair.get(e['id'])
-                    src = 'current' if (m and m.get('from_current_frame')) else ('last' if m else 'never')
-                    print(f"  pair_num={e['id']} actual_cm={e.get('actual_cm')} spec_code={e.get('spec_code')} source={src}")
-                # Explicitly log LEG Opening and Inseam so we can confirm they are picked from live measurement
-                for e in measurement_data['measurements']:
-                    if e.get('spec_code') in ('JD_k-30', 'JD_A-32'):
-                        print(f"  [POM] {e.get('spec_code')} ({e.get('name', '')}) actual_cm={e.get('actual_cm')}")
-            
-            return True
-        except Exception as e:
-            print(f"[ERR] Error saving live measurements: {e}")
-            return False
 
     def live_mouse_callback(self, event, x, y, flags, param):
         """Mouse callback for live measurement window"""
@@ -2788,29 +1842,24 @@ class LiveKeypointDistanceMeasurer:
     def switch_to_back_side(self):
         """Switch to back side measurement"""
         if not hasattr(self, 'back_keypoints') or not self.back_keypoints or self.back_reference_image is None:
-            print("❌ No back annotation found! Please create back annotation first.")
+            print("❌ No back annotation found! Please ensure back annotation file exists.")
             return False
         
         self.current_side = 'back'
         self.transferred_keypoints = []
         self.is_keypoints_transferred = False
-        back_box = getattr(self, 'back_placement_box', [])
-        if back_box and len(back_box) == 4:
-            print(f"[BACK] Using back placement_box for boundary: {back_box}")
-        elif self.back_keypoints:
-            print(f"[BACK] Back annotation has {len(self.back_keypoints)} keypoints but no valid placement_box: {back_box}")
         self.keypoint_stabilized = False
         self.last_valid_keypoints = []
         self.stabilization_frames = 0
         self.perpendicular_points_initialized = False
-        self.perpendicular_points_static_map = {}
+        self.perpendicular_points_static = []
         print("🔄 Switched to BACK side measurement")
         return True
 
     def switch_to_front_side(self):
         """Switch to front side measurement"""
         if not hasattr(self, 'keypoints') or not self.keypoints or self.reference_image is None:
-            print("❌ No front annotation found! Please create front annotation first.")
+            print("❌ No front annotation found! Please ensure front annotation file exists.")
             return False
         
         self.current_side = 'front'
@@ -2820,24 +1869,78 @@ class LiveKeypointDistanceMeasurer:
         self.last_valid_keypoints = []
         self.stabilization_frames = 0
         self.perpendicular_points_initialized = False
-        self.perpendicular_points_static_map = {}
+        self.perpendicular_points_static = []
         print("🔄 Switched to FRONT side measurement")
         return True
 
+    def save_live_measurements(self, measurements, annotation_name=None):
+        """Save current live measurements to JSON file for Operator Panel UI access.
+        Includes spec_id and spec_code from measurement_specs (if available from UI)."""
+        try:
+            results_dir = 'measurement_results'
+            os.makedirs(results_dir, exist_ok=True)
+            
+            # Get measurement_specs passed from UI via worker config
+            specs = getattr(self, 'measurement_specs', []) or []
+            
+            measurement_data = {
+                'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S'),
+                'annotation_name': annotation_name or getattr(self, 'current_annotation_name', 'unknown'),
+                'side': self.current_side,
+                'is_calibrated': self.is_calibrated,
+                'pixels_per_cm': self.pixels_per_cm,
+                'tolerance_cm': self.qc_tolerance_cm,
+                'garment_color': self.garment_color,
+                'measurements': []
+            }
+            
+            for measurement in measurements:
+                pair_num, real_distance, pixel_distance, qc_passed = measurement[:4]
+                is_fallback = measurement[4] if len(measurement) >= 5 else False
+                
+                # Look up spec info for this pair (pair_num is 1-based, specs index is 0-based)
+                spec_index = pair_num - 1
+                spec = specs[spec_index] if spec_index < len(specs) else None
+                
+                entry = {
+                    'id': pair_num,
+                    'name': spec.get('name', f'Measurement {pair_num}') if spec else f'Measurement {pair_num}',
+                    'spec_id': spec.get('db_id') if spec else None,
+                    'spec_code': spec.get('code') if spec else None,
+                    'actual_cm': round(real_distance, 2),
+                    'pixel_distance': round(pixel_distance, 2),
+                    'expected_value': spec.get('expected_value') if spec else None,
+                    'tolerance_plus': 1.0,
+                    'tolerance_minus': 1.0,
+                    'min_valid': round(real_distance - 1.0, 2),
+                    'max_valid': round(real_distance + 1.0, 2),
+                    'qc_passed': qc_passed,
+                    'is_fallback': is_fallback
+                }
+                measurement_data['measurements'].append(entry)
+            
+            live_file = os.path.join(results_dir, 'live_measurements.json')
+            with open(live_file, 'w') as f:
+                json.dump(measurement_data, f, indent=4)
+            
+            return True
+        except Exception as e:
+            print(f"[ERR] Error saving live measurements: {e}")
+            return False
+
     def transfer_keypoints_to_live(self, headless=False):
-        """Step 3: Live measurement with robust keypoint tracking and point-type specific handling
+        """Step 3: Live measurement with robust keypoint tracking and static perpendicular points
         Args:
-            headless: If True, skip interactive prompts, use fullscreen, and save live measurements
+            headless: If True, skip interactive prompts (for API-driven measurement)
         """
         print("\n" + "="*60)
         print("STEP 3: LIVE MEASUREMENT - ROBUST KEYPOINT TRACKING")
         print("="*60)
-        print("Keypoints will now adapt based on their type:")
-        print("  CORNER points: Enhanced detection (template + Shi-Tomasi + Harris)")
-        print("  PERPENDICULAR points: Static after first successful match")
-        print("  NORMAL points: Basic feature matching")
+        print("Keypoints will now adapt to different garment sizes automatically.")
+        print("NOW WITH STATIC PERPENDICULAR POINTS (13-14, 15-16, 17-18) - they will be fixed after initial match!")
         print("PAUSE FUNCTION + MOUSE PAN/ZOOM!")
         print("B KEY: Switch between FRONT and BACK sides!")
+        print("Y KEY: Toggle perpendicular points static/adaptive mode")
         
         # UPDATED: Set camera gain and auto exposure based on garment color for live measurement (with White option)
         self.set_live_gain()
@@ -2845,17 +1948,14 @@ class LiveKeypointDistanceMeasurer:
         if not headless:
             input("Press Enter to start live measurement...")
         else:
-            print("[HEADLESS] Starting live measurement automatically...")
+            print("[HEADLESS] Starting measurement automatically...")
         
-        window_name = "Live Measurement - Robust Tracking"
-        if headless:
-            cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-            cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-        else:
-            cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-            cv2.resizeWindow(window_name, 1200, 800)
+        cv2.namedWindow("Live Measurement - Robust Tracking", cv2.WINDOW_NORMAL)
+        # Make window fullscreen for industrial visibility
+        cv2.setWindowProperty("Live Measurement - Robust Tracking", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        print("[DISPLAY] Camera window set to FULLSCREEN mode - Press ESC or Q to exit")
         
-        cv2.setMouseCallback(window_name, self.live_mouse_callback)
+        cv2.setMouseCallback("Live Measurement - Robust Tracking", self.live_mouse_callback)
         
         terminal_update_counter = 0
         self.keypoint_stabilized = False
@@ -2863,13 +1963,10 @@ class LiveKeypointDistanceMeasurer:
         self.stabilization_frames = 0
         self.last_detected_scale = 1.0
         self.perpendicular_points_initialized = False
-        self.perpendicular_points_static_map = {}
+        self.perpendicular_points_static = []
         
         # Option to toggle perpendicular points static behavior
         perpendicular_static_mode = True  # Default to static mode
-        
-        # External stop flag for headless mode (set by measurement_worker)
-        self.should_stop = getattr(self, 'should_stop', False)
         
         while True:
             if not self.paused:
@@ -2884,10 +1981,7 @@ class LiveKeypointDistanceMeasurer:
             else:
                 display_frame = self.pause_frame.copy()
             
-            # Draw placement guide for current side (front or back) when box is available
-            if self.current_side == 'front' and hasattr(self, 'placement_box') and self.placement_box and len(self.placement_box) == 4:
-                self.draw_placement_guide(display_frame)
-            elif self.current_side == 'back' and getattr(self, 'back_placement_box', []) and len(getattr(self, 'back_placement_box', [])) == 4:
+            if self.current_side == 'front' and hasattr(self, 'placement_box') and self.placement_box:
                 self.draw_placement_guide(display_frame)
             
             if not self.paused:
@@ -2900,15 +1994,32 @@ class LiveKeypointDistanceMeasurer:
                     self.last_transfer_time = current_time
                     if len(self.transferred_keypoints) > 0:
                         self.is_keypoints_transferred = True
+                        
+                        # Initialize perpendicular points as static after first successful transfer
+                        if not self.perpendicular_points_initialized and len(self.transferred_keypoints) >= 18:
+                            current_keypoints = self.keypoints if self.current_side == 'front' else self.back_keypoints
+                            if len(current_keypoints) >= 18:
+                                # Check if perpendicular points are valid
+                                valid_perpendicular = True
+                                static_points = []
+                                for idx in range(12, 18):  # Points 13-18 (0-based 12-17)
+                                    if self.transferred_keypoints[idx][0] == -1 or self.transferred_keypoints[idx][1] == -1:
+                                        valid_perpendicular = False
+                                        break
+                                    static_points.append(self.transferred_keypoints[idx].copy())
+                                
+                                if valid_perpendicular:
+                                    self.perpendicular_points_static = static_points
+                                    self.perpendicular_points_initialized = True
+                                    print("📏 Perpendicular points 13-18 now STATIC!")
             
             current_measurements = []
             
             if self.is_keypoints_transferred and self.transferred_keypoints:
                 valid_points_count = 0
                 current_keypoints = self.keypoints if self.current_side == 'front' else self.back_keypoints
-                current_keypoint_types = self.keypoint_types if self.current_side == 'front' else self.back_keypoint_types
                 
-                # Draw keypoints with type-specific colors
+                # Draw keypoints
                 for i, point in enumerate(self.transferred_keypoints):
                     if point[0] == -1 or point[1] == -1:
                         continue
@@ -2916,31 +2027,30 @@ class LiveKeypointDistanceMeasurer:
                     valid_points_count += 1
                     disp_x, disp_y = self.original_to_zoomed_coords(point[0], point[1], display_frame.shape)
                     
-                    point_type = current_keypoint_types[i] if i < len(current_keypoint_types) else 'normal'
-                    
-                    if point_type == 'corner':
+                    if i < self.corner_keypoints_count:
                         if self.keypoint_stabilized:
-                            color = (0, 255, 255)  # Yellow
+                            color = (0, 255, 255)
                         else:
-                            color = (0, 200, 255)  # Orange-yellow
-                        type_letter = "C"
-                    elif point_type == 'perp':
+                            color = (0, 200, 255)
+                        point_type = "C"
+                    elif i in [12, 13, 14, 15, 16, 17]:  # Perpendicular points
                         if self.perpendicular_points_initialized and perpendicular_static_mode:
                             color = (255, 0, 255)  # Bright Purple for static perpendicular points
+                            point_type = "P-S"  # P for Perpendicular Static
                         else:
                             color = (255, 0, 200)  # Magenta for adaptive perpendicular points
-                        type_letter = "P"
-                    else:  # normal
+                            point_type = "P-A"  # P for Perpendicular Adaptive
+                    else:
                         if self.keypoint_stabilized:
-                            color = (0, 255, 0)  # Green
+                            color = (0, 255, 0)
                         else:
-                            color = (0, 255, 255)  # Yellow-green
-                        type_letter = "N"
+                            color = (0, 255, 255)
+                        point_type = "R"
                     
                     cv2.circle(display_frame, (disp_x, disp_y), self.keypoint_size, color, -1)
                     cv2.circle(display_frame, (disp_x, disp_y), self.keypoint_size + 3, (0, 0, 255), self.keypoint_border)
                     
-                    cv2.putText(display_frame, f"{i+1}({type_letter})", 
+                    cv2.putText(display_frame, f"{i+1}({point_type})", 
                                (disp_x + 20, disp_y - 20), 
                                cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 3)
                 
@@ -2978,19 +2088,12 @@ class LiveKeypointDistanceMeasurer:
                             )
                             current_measurements.append((i//2+1, 0, pixel_distance, False))
             
-            # Persist current measurements for QC-triggered saves and next-frame reference
-            if current_measurements:
-                self.last_measurements = current_measurements
             if not self.paused:
                 terminal_update_counter += 1
-                if terminal_update_counter >= 20 and current_measurements:
+                if terminal_update_counter >= 5 and current_measurements:
                     self.display_measurements_on_terminal(current_measurements)
+                    self.save_live_measurements(current_measurements)
                     terminal_update_counter = 0
-                # In headless mode: save every frame so QC results and status update live in Operator Panel
-                # Pass current frame data when available; otherwise last_measurements (merge inside save preserves valid values)
-                if headless:
-                    payload = current_measurements if current_measurements else getattr(self, 'last_measurements', [])
-                    self.save_live_measurements(payload)
             
             if self.paused:
                 h, w = display_frame.shape[:2]
@@ -2999,7 +2102,7 @@ class LiveKeypointDistanceMeasurer:
                 cv2.putText(display_frame, "Press P to resume", (int(w/2 - 180), int(h/2) + 60), 
                            cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 3)
             
-            # Add subtle status indicators at the bottom of the screen
+            # Add subtle status indicators at the bottom of the screen instead
             h, w = display_frame.shape[:2]
             bottom_y = h - 30
             
@@ -3018,15 +2121,11 @@ class LiveKeypointDistanceMeasurer:
             cv2.putText(display_frame, "Controls: P=Pause, B=Side, Z/X=Zoom", 
                        (620, bottom_y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (150, 150, 150), 2)
             
-            cv2.imshow(window_name, display_frame)
-            
-            # Check external stop flag (for headless mode)
-            if headless and getattr(self, 'should_stop', False):
-                print("[HEADLESS] Stop signal received, exiting measurement loop")
-                break
+            cv2.imshow("Live Measurement - Robust Tracking", display_frame)
             
             key = cv2.waitKey(1) & 0xFF
-            if key == ord('q') or key == ord('Q'):
+            if key == ord('q') or key == ord('Q') or key == 27:  # Q or ESC to quit
+                print("[EXIT] Exiting measurement...")
                 break
             elif key == ord('p') or key == ord('P'):
                 self.paused = not self.paused
@@ -3041,9 +2140,9 @@ class LiveKeypointDistanceMeasurer:
                     if perpendicular_static_mode:
                         print("📏 Perpendicular points now STATIC")
                         # Re-apply static positions
-                        for idx, static_pt in self.perpendicular_points_static_map.items():
-                            if idx < len(self.transferred_keypoints):
-                                self.transferred_keypoints[idx] = static_pt.copy()
+                        for j, idx in enumerate(self.perpendicular_points_indices):
+                            if idx < len(self.transferred_keypoints) and j < len(self.perpendicular_points_static):
+                                self.transferred_keypoints[idx] = self.perpendicular_points_static[j].copy()
                     else:
                         print("📏 Perpendicular points now ADAPTIVE (will move with garment)")
             elif key == ord('b') or key == ord('B'):
@@ -3092,15 +2191,22 @@ class LiveKeypointDistanceMeasurer:
         print("=" * 60)
         print("🎯 ROBUST LIVE KEYPOINT DISTANCE MEASUREMENT")
         print("=" * 60)
-        print("Now with point-type specific tracking!")
+        print("Now with adaptive keypoint tracking for different garment sizes!")
         print("NEW FEATURES:")
-        print("  • CORNER points: Enhanced detection (template + Shi-Tomasi + Harris)")
-        print("  • PERPENDICULAR points: 90° alignment during annotation, static tracking")
-        print("  • NORMAL points: Basic feature extraction")
+        print("  • Perpendicular points 13-14, 15-16, 17-18 alignment at 90 degrees")
+        print("  • Static perpendicular points during live tracking")
         print("  • Camera gain adjustment based on garment color:")
         print("    - White: Gain 20, Auto Exposure ON (for ALL captures)")
         print("    - Black: Gain 150, Auto Exposure OFF (for ALL captures)")
         print("    - Other: Gain 64, Auto Exposure ON (for ALL captures)")
+        print("=" * 60)
+        print("\nNOTE: This version only LOADS existing annotation files.")
+        print("Please ensure the following files exist:")
+        print(f"  - {self.annotation_file} (front annotation)")
+        print(f"  - {self.back_annotation_file} (back annotation)")
+        print(f"  - {self.reference_image_file} (front reference image)")
+        print(f"  - {self.back_reference_image_file} (back reference image)")
+        print(f"  - {self.calibration_file} (calibration - optional)")
         print("=" * 60)
         
         if not self.initialize_camera():
