@@ -3,8 +3,15 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import fs from 'node:fs'
 import { spawn, ChildProcess } from 'node:child_process'
-import { PYTHON_API_URL, MAGICQC_API_BASE } from './apiConfig'
+import { PYTHON_API_URL, MAGICQC_API_BASE, MAGICQC_API_KEY } from './apiConfig'
 import { apiClient } from './api-client'
+import { getFingerprint } from './hwid'
+import { validateLicense, createLicense, licenseExists } from './license'
+import {
+  checkForDebugger, checkForVM, checkCameraSDK,
+  checkForDebugTools, checkForDllInjection, checkBinaryIntegrity,
+} from './security'
+import { loadSecureConfigs, applyEnvConfig } from './config-vault'
 
 // Get __dirname equivalent for ES modules
 const __filename = fileURLToPath(import.meta.url)
@@ -19,36 +26,99 @@ const __dirname = path.dirname(__filename)
 // │ │ ├── main.js
 // │ │ └── preload.mjs
 // │
-process.env.APP_ROOT = path.join(__dirname, '..')
+// Production path resolution:
+//   app.isPackaged = true  → APP_ROOT = process.resourcesPath (writable, outside asar)
+//   app.isPackaged = false → APP_ROOT = project root (parent of dist-electron/)
+process.env.APP_ROOT = app.isPackaged
+  ? process.resourcesPath                  // e.g. C:\Users\X\AppData\Local\MagicQC\resources
+  : path.join(__dirname, '..')             // project root in dev
 
 // 🚧 Use ['ENV_NAME'] avoid vite:define plugin - Vite@2.x
 export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
-export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron')
-export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 
-process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
+// dist/ and dist-electron/ are INSIDE the asar archive in production.
+// Use app.getAppPath() to reference them (Electron can read asar transparently).
+// APP_ROOT is for writable runtime paths (logs, python-core, configs) outside asar.
+const ASAR_ROOT = app.getAppPath()           // resources/app.asar in prod, project root in dev
+export const MAIN_DIST = path.join(ASAR_ROOT, 'dist-electron')
+export const RENDERER_DIST = path.join(ASAR_ROOT, 'dist')
+
+process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(ASAR_ROOT, 'public') : RENDERER_DIST
+
+// Global dev/prod flag — used throughout for conditional behavior
+const isDev = !app.isPackaged
 
 let win: BrowserWindow | null
 let pythonProcess: ChildProcess | null = null
 let pythonLogStream: fs.WriteStream | null = null
+let licenseValid = false   // Tracks whether hardware license passed
+
+// ══════════════════════════════════════════════════════════════
+//  SINGLE INSTANCE LOCK — prevent multiple copies running
+// ══════════════════════════════════════════════════════════════
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+  // Another instance is already running — quit immediately
+  app.quit()
+}
+app.on('second-instance', () => {
+  // User tried to run a second copy — focus the existing window
+  if (win) {
+    if (win.isMinimized()) win.restore()
+    win.focus()
+  }
+})
+
+// ── Security audit log ──────────────────────────────────────
+function securityLog(message: string): void {
+  const logDir = path.join(process.env.APP_ROOT!, 'runtime', 'logs')
+  if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true })
+  const logPath = path.join(logDir, 'security.log')
+  const timestamp = new Date().toISOString()
+  fs.appendFileSync(logPath, `[${timestamp}] ${message}\n`)
+}
+
+// ── Content Security Policy ─────────────────────────────────
+function setupCSP(): void {
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          isDev
+            // Dev: permissive — Vite HMR needs inline scripts, eval, and WebSocket
+            ? "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws: wss: http://localhost:* http://127.0.0.1:*; img-src 'self' data: blob: https:; object-src 'none'"
+            // Prod: strict — no eval, no inline scripts, only local Python API
+            : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' http://localhost:* http://127.0.0.1:*; img-src 'self' data: blob:; object-src 'none'"
+        ],
+      },
+    })
+  })
+}
 
 // Start Python API server automatically
 async function startPythonServer(): Promise<boolean> {
   return new Promise((resolve) => {
-    const pythonScript = path.join(process.env.APP_ROOT!, 'python-core', 'core_main.py')
-    console.log('🐍 Starting Python API server:', pythonScript)
+    // Production: spawn compiled exe directly (no Python interpreter needed)
+    // Dev:        spawn python interpreter with script path
+    const exePath = path.join(process.env.APP_ROOT!, 'python-core', 'dist', 'magicqc_core.exe')
+    const scriptPath = path.join(process.env.APP_ROOT!, 'python-core', 'core_main.py')
+
+    const spawnCmd = isDev ? 'python' : exePath
+    const spawnArgs = isDev ? [scriptPath] : []
+    console.log(`🐍 Starting Python API server: ${spawnCmd} ${spawnArgs.join(' ')}`)
 
     // Ensure logs directory exists and open a write-stream for Python output
-    const logsDir = path.join(process.env.APP_ROOT!, 'logs')
+    const logsDir = path.join(process.env.APP_ROOT!, 'runtime', 'logs')
     if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true })
     const logPath = path.join(logsDir, 'python_server.log')
     pythonLogStream = fs.createWriteStream(logPath, { flags: 'a' })
     pythonLogStream.write(`\n${'='.repeat(60)}\n[${new Date().toISOString()}] Python server starting\n${'='.repeat(60)}\n`)
 
     try {
-      // Spawn Python process – fully hidden, no console window for the operator.
+      // Spawn process – fully hidden, no console window for the operator.
       // stdout/stderr are piped so we can write them to the log file.
-      pythonProcess = spawn('python', [pythonScript], {
+      pythonProcess = spawn(spawnCmd, spawnArgs, {
         cwd: process.env.APP_ROOT,
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true, // Sets STARTF_USESHOWWINDOW + SW_HIDE on Windows
@@ -133,29 +203,63 @@ function stopPythonServer() {
   }
 }
 
-function createWindow() {
+function createWindow(opts?: { fingerprint: string; reason: string } | { sdkMissing: true }) {
   win = new BrowserWindow({
-    icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
+    icon: path.join(ASAR_ROOT, 'public', 'icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: false, // Required for preload script to work with contextBridge
-      // Content Security Policy is set via meta tag in index.html
+      devTools: isDev, // Disable DevTools in production
     },
   })
 
-  // Test active push message to Renderer-process.
+  // ── Production security: full DevTools & inspection lockdown ──
+  if (!isDev) {
+    // Block F12, Ctrl+Shift+I/J/C, Ctrl+U (view-source)
+    win.webContents.on('before-input-event', (_event, input) => {
+      const isDevToolsShortcut =
+        input.key === 'F12' ||
+        (input.control && input.shift && ['I', 'i', 'J', 'j', 'C', 'c'].includes(input.key)) ||
+        (input.control && (input.key === 'u' || input.key === 'U'))
+      if (isDevToolsShortcut) {
+        _event.preventDefault()
+      }
+    })
+
+    // Disable right-click context menu in production
+    win.webContents.on('context-menu', (e) => {
+      e.preventDefault()
+    })
+
+    // Override openDevTools to no-op (prevents programmatic access)
+    win.webContents.openDevTools = () => { }
+  }
+
+  // Push message to Renderer-process on load
   win.webContents.on('did-finish-load', () => {
     win?.webContents.send('main-process-message', (new Date).toLocaleString())
   })
 
-  if (VITE_DEV_SERVER_URL) {
+  // ── Load the appropriate page ──
+  if (opts && 'sdkMissing' in opts) {
+    // Camera SDK not found — show blocking SDK missing page
+    const htmlPath = path.join(ASAR_ROOT, 'public', 'sdk_missing.html')
+    win.loadFile(htmlPath)
+  } else if (opts && 'fingerprint' in opts) {
+    // License / security failed — show unauthorized page
+    const fp = encodeURIComponent(opts.fingerprint)
+    const reason = encodeURIComponent(opts.reason)
+    const htmlPath = path.join(ASAR_ROOT, 'public', 'unauthorized.html')
+    win.loadFile(htmlPath, { query: { fp, reason } })
+  } else if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL)
   } else {
-    // win.loadFile('dist/index.html')
     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }
+
+  win.maximize()
 }
 
 // Quit when all windows are closed, except on macOS. There, it's common
@@ -176,27 +280,216 @@ app.on('activate', () => {
   }
 })
 
-// Set up Content Security Policy
-function setupCSP() {
-  // CSP for development (allows Vite HMR)
-  // In production builds, this will be more restrictive
-  const isDev = !!VITE_DEV_SERVER_URL
+// Initialize app and create window when ready
+app.whenReady().then(async () => {
+  try {
+    // Log startup environment for diagnostics (dev only — no path leaks in production)
+    if (isDev) {
+      console.log(`🏭 MagicQC Operator Panel v${app.getVersion()}`)
+      console.log(`   Mode: DEVELOPMENT`)
+      console.log(`   APP_ROOT: ${process.env.APP_ROOT}`)
+      console.log(`   ASAR_ROOT: ${ASAR_ROOT}`)
+      console.log(`   Platform: ${process.platform} ${process.arch}`)
+    }
 
-  // Build CSP allowing the Python API and MagicQC API origins dynamically
-  const pythonOrigin = PYTHON_API_URL      // e.g. http://localhost:5000
-  const magicqcOrigin = MAGICQC_API_BASE    // e.g. https://magicqc.online
+    // Clear Chromium cache on startup to prevent corruption-related blank screens
+    await session.defaultSession.clearCache()
 
-  const csp = isDev
-    ? `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* ws://localhost:* wss://localhost:*; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' ${pythonOrigin} ${magicqcOrigin} http://localhost:* ws://localhost:* wss://localhost:*; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none';`
-    : `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https: blob:; connect-src 'self' ${pythonOrigin} ${magicqcOrigin}; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none';`
+    // Set up Content Security Policy
+    setupCSP()
 
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [csp]
+    // Ensure all runtime directories exist (critical for fresh installs)
+    // All writable dirs live under runtime/ — keeps app root clean
+    const runtimeBase = path.join(process.env.APP_ROOT!, 'runtime')
+    const runtimeDirs = ['logs', 'storage', 'temp_annotations', 'temp_measure', 'measurement_results', 'secure']
+    for (const dir of runtimeDirs) {
+      const dirPath = path.join(runtimeBase, dir)
+      if (!fs.existsSync(dirPath)) {
+        fs.mkdirSync(dirPath, { recursive: true })
+        if (isDev) console.log(`📁 Created runtime directory: runtime/${dir}`)
       }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  SECURITY GATES (production only — dev mode bypasses all)
+    //  Order: anti-debug → debug tools → DLL → VM → license → SDK → exe → integrity
+    // ══════════════════════════════════════════════════════════════
+    if (!isDev) {
+      securityLog('=== Application startup ===')
+
+      // ── Gate 1: Anti-Debug (Node.js level) ──
+      const debugCheck = checkForDebugger()
+      if (!debugCheck.safe) {
+        securityLog(`BLOCKED: ${debugCheck.reason}`)
+        console.error(`🚫 Security: ${debugCheck.reason}`)
+        app.quit()
+        return
+      }
+      securityLog('PASS: Anti-debug check')
+
+      // ── Gate 2: Debug Tool Process Scanner ──
+      const toolCheck = checkForDebugTools()
+      if (!toolCheck.safe) {
+        securityLog(`BLOCKED: ${toolCheck.reason}`)
+        console.error(`🚫 Security: ${toolCheck.reason}`)
+        app.quit()
+        return
+      }
+      securityLog('PASS: No debug tools detected')
+
+      // ── Gate 3: DLL Injection Detection ──
+      const dllCheck = checkForDllInjection()
+      if (!dllCheck.safe) {
+        securityLog(`BLOCKED: ${dllCheck.reason}`)
+        console.error(`🚫 Security: ${dllCheck.reason}`)
+        app.quit()
+        return
+      }
+      securityLog('PASS: No DLL injection detected')
+
+      // ── Gate 4: VM Detection ──
+      const vmCheck = checkForVM()
+      if (!vmCheck.safe) {
+        securityLog(`BLOCKED: ${vmCheck.reason}`)
+        console.error(`🚫 Security: ${vmCheck.reason}`)
+        const fp = getFingerprint()
+        createWindow({ fingerprint: fp, reason: vmCheck.reason })
+        return
+      }
+      securityLog('PASS: VM detection check')
+
+      // ── Gate 5: Hardware License ──
+      console.log('🔒 Validating hardware license...')
+      const fingerprint = getFingerprint()
+
+      if (!licenseExists()) {
+        console.log('🔑 First launch detected — creating hardware license')
+        createLicense(fingerprint)
+        securityLog(`LICENSE CREATED: fingerprint=${fingerprint.substring(0, 16)}...`)
+        console.log('✅ License created and bound to this device')
+      }
+
+      const result = validateLicense(fingerprint)
+      if (!result.valid) {
+        securityLog(`BLOCKED: License validation failed — ${result.reason}`)
+        console.error(`🚫 License validation FAILED: ${result.reason}`)
+        createWindow({ fingerprint: result.fingerprint || fingerprint, reason: result.reason })
+        return
+      }
+      securityLog('PASS: Hardware license validated')
+
+      // ── Gate 6: Camera SDK (BLOCKING) ──
+      const sdkCheck = checkCameraSDK()
+      if (!sdkCheck.safe) {
+        securityLog(`BLOCKED: ${sdkCheck.reason}`)
+        console.error(`🚫 ${sdkCheck.reason}`)
+        createWindow({ sdkMissing: true })
+        return
+      }
+      securityLog('PASS: MindVision Camera SDK found')
+
+      // ── Gate 7: Core binary existence ──
+      const exePath = path.join(process.env.APP_ROOT!, 'python-core', 'dist', 'magicqc_core.exe')
+      if (!fs.existsSync(exePath)) {
+        securityLog(`BLOCKED: magicqc_core.exe not found at ${exePath}`)
+        console.error(`🚫 magicqc_core.exe not found at: ${exePath}`)
+        createWindow({ fingerprint, reason: 'Core engine binary missing. Reinstall required.' })
+        return
+      }
+      securityLog('PASS: Core binary exists')
+
+      // ── Gate 8: Binary integrity (SHA-256 hash verification) ──
+      const hashStorePath = path.join(process.env.APP_ROOT!, 'runtime', 'secure')
+      const integrityCheck = checkBinaryIntegrity(exePath, hashStorePath)
+      if (!integrityCheck.safe) {
+        securityLog(`BLOCKED: ${integrityCheck.reason}`)
+        console.error(`🚫 ${integrityCheck.reason}`)
+        createWindow({ fingerprint, reason: 'Core binary integrity check failed. Reinstall required.' })
+        return
+      }
+      securityLog('PASS: Binary integrity verified')
+
+      licenseValid = true
+      securityLog('ALL 8 GATES PASSED — starting application')
+      console.log('✅ All security checks passed')
+    } else {
+      licenseValid = true  // Dev mode always passes
+    }
+
+    // ── Secure config loading (encrypt on first run, decrypt to memory) ──
+    if (!isDev) {
+      try {
+        const configs = loadSecureConfigs(process.env.APP_ROOT!)
+        const envContent = configs.get('.env')
+        if (envContent) {
+          applyEnvConfig(envContent)
+          securityLog('CONFIG: .env loaded from encrypted vault')
+        }
+        securityLog(`CONFIG: ${configs.size} config files loaded securely`)
+      } catch (err) {
+        securityLog(`CONFIG WARNING: Failed to load encrypted configs: ${err}`)
+      }
+    }
+
+    // Start Python API server
+    console.log('🚀 Starting application services...')
+
+    const pythonReady = await startPythonServer()
+    if (pythonReady) {
+      console.log('✅ Python measurement server started successfully')
+    } else {
+      console.warn('⚠️ Python server may not be available - measurement features may be limited')
+    }
+
+    // Test MagicQC API connectivity (non-blocking)
+    apiClient.ping().then(result => {
+      if (result.success) {
+        console.log('✅ MagicQC API connected successfully')
+      } else {
+        console.warn('⚠️ MagicQC API may not be available')
+      }
+    }).catch(err => {
+      console.warn('⚠️ MagicQC API unreachable:', err.message)
     })
+
+    // ── IPC handlers register ONLY after all security gates pass ──
+    // Unauthorized state gets zero IPC bridges (no data access possible)
+    setupApiHandlers()
+    setupMeasurementHandlers()
+
+    // Create window (normal app)
+    createWindow()
+
+    // ── Process heartbeat: auto-close if magicqc_core.exe dies (3s interval) ──
+    if (!isDev && pythonProcess) {
+      const heartbeatInterval = setInterval(() => {
+        if (!pythonProcess || pythonProcess.killed || pythonProcess.exitCode !== null) {
+          clearInterval(heartbeatInterval)
+          securityLog('INCIDENT: Python core process died unexpectedly')
+          console.error('💀 Python core process died unexpectedly — closing application')
+          app.quit()
+        }
+      }, 3000)
+
+      // Clean up interval on app quit
+      app.on('before-quit', () => clearInterval(heartbeatInterval))
+    }
+  } catch (error) {
+    console.error('Failed to start application:', error)
+    app.quit()
+  }
+})
+
+// Set up IPC handlers for MagicQC API operations (replaces old database handlers)
+function setupApiHandlers() {
+  // Ping / connection test
+  ipcMain.handle('api:ping', async () => {
+    try {
+      const result = await apiClient.ping()
+      return { success: result.success, message: 'API connection successful' }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'API unreachable' }
+    }
   })
 
   // Operators list (GraphQL)
@@ -218,72 +511,6 @@ function setupCSP() {
     } catch (error) {
       console.error('API purchaseOrdersAll error:', error)
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
-    }
-  })
-}
-
-// Initialize app and create window when ready
-app.whenReady().then(async () => {
-  try {
-    // Clear Chromium cache on startup to prevent corruption-related blank screens
-    await session.defaultSession.clearCache()
-
-    // Set up Content Security Policy
-    setupCSP()
-
-    // Ensure all runtime directories exist (critical for fresh installs)
-    const runtimeDirs = ['logs', 'storage', 'temp_annotations', 'temp_measure', 'measurement_results']
-    for (const dir of runtimeDirs) {
-      const dirPath = path.join(process.env.APP_ROOT!, dir)
-      if (!fs.existsSync(dirPath)) {
-        fs.mkdirSync(dirPath, { recursive: true })
-        console.log(`📁 Created runtime directory: ${dir}`)
-      }
-    }
-
-    // Start Python API server automatically
-    console.log('🚀 Starting application services...')
-    const pythonReady = await startPythonServer()
-    if (pythonReady) {
-      console.log('✅ Python measurement server started successfully')
-    } else {
-      console.warn('⚠️ Python server may not be available - measurement features may be limited')
-    }
-
-    // Test MagicQC API connectivity (non-blocking)
-    apiClient.ping().then(result => {
-      if (result.success) {
-        console.log('✅ MagicQC API connected successfully')
-      } else {
-        console.warn('⚠️ MagicQC API may not be available')
-      }
-    }).catch(err => {
-      console.warn('⚠️ MagicQC API unreachable:', err.message)
-    })
-
-    // Set up IPC handlers for API operations (replaces old database handlers)
-    setupApiHandlers()
-
-    // Set up IPC handlers for measurement operations
-    setupMeasurementHandlers()
-
-    // Create window
-    createWindow()
-  } catch (error) {
-    console.error('Failed to start application:', error)
-    app.quit()
-  }
-})
-
-// Set up IPC handlers for MagicQC API operations (replaces old database handlers)
-function setupApiHandlers() {
-  // Ping / connection test
-  ipcMain.handle('api:ping', async () => {
-    try {
-      const result = await apiClient.ping()
-      return { success: result.success, message: 'API connection successful' }
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : 'API unreachable' }
     }
   })
 
@@ -408,20 +635,35 @@ function setupApiHandlers() {
     }
   })
 
-  // Verify PIN (now via API instead of local DB)
+  // Verify PIN (live GraphQL mutation against Laravel backend)
   ipcMain.handle('api:verifyPin', async (_event, pin: string) => {
     try {
-      console.log(`[AUTH] Verifying PIN via API...`)
+      console.log(`[AUTH] Verifying PIN via GraphQL API...`)
+      console.log(`[AUTH] API Base: ${MAGICQC_API_BASE}`)
       const result = await apiClient.verifyPin(pin)
       if (result.success && result.operator) {
-        console.log(`[AUTH] PIN verified for: ${result.operator.full_name}`)
+        console.log(`[AUTH] ✅ PIN verified for: ${result.operator.full_name} (employee_id: ${result.operator.employee_id})`)
         return { success: true, data: result.operator }
       }
-      console.log(`[AUTH] PIN verification failed: ${result.message || 'Invalid PIN'}`)
+      console.log(`[AUTH] ❌ PIN verification failed: ${result.message || 'Invalid PIN'}`)
       return { success: false, error: result.message || 'Invalid PIN. Please try again.' }
-    } catch (error) {
-      console.error('[AUTH] API error:', error)
-      return { success: false, error: 'Authentication service unavailable' }
+    } catch (error: any) {
+      // Log the FULL raw error — never mask it
+      console.error('[AUTH] ❌ Raw API error:', error?.message || error)
+      console.error('[AUTH] Error stack:', error?.stack)
+
+      // Distinguish error types for the user
+      const msg = error?.message || ''
+      if (msg.includes('timed out') || msg.includes('ETIMEDOUT') || msg.includes('ECONNREFUSED')) {
+        return { success: false, error: 'Cannot reach authentication server. Check network connection.' }
+      }
+      if (msg.includes('GraphQL Error')) {
+        return { success: false, error: `Server rejected request: ${msg}` }
+      }
+      if (msg.includes('HTTP 4') || msg.includes('HTTP 5')) {
+        return { success: false, error: `Server error: ${msg}` }
+      }
+      return { success: false, error: `Authentication failed: ${msg || 'Unknown error'}` }
     }
   })
 
@@ -451,6 +693,98 @@ function setupApiHandlers() {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
     }
   })
+
+  // ── API Connectivity Status ─────────────────────────────────────────────
+  ipcMain.handle('api:connectivity', () => {
+    return { status: apiConnectionStatus, lastCheck: apiLastCheckTime }
+  })
+
+  // ── Start auto-reconnect heartbeat ──────────────────────────────────────
+  startApiHeartbeat()
+}
+
+// ── API Connection Manager (auto-reconnect with exponential backoff) ──────
+let apiConnectionStatus: 'connected' | 'reconnecting' | 'disconnected' = 'disconnected'
+let apiLastCheckTime: string = ''
+let apiHeartbeatTimer: NodeJS.Timeout | null = null
+let apiRetryCount = 0
+const API_BACKOFF_SCHEDULE = [3000, 5000, 10000, 20000, 30000] // ms
+const API_HEARTBEAT_INTERVAL = 30000 // 30s when connected
+
+async function checkApiConnectivity(): Promise<boolean> {
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 10000)
+    const response = await fetch(`${MAGICQC_API_BASE}/graphql`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': MAGICQC_API_KEY,
+      },
+      body: JSON.stringify({ query: '{ __typename }' }),
+      signal: controller.signal,
+    })
+    clearTimeout(timeout)
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
+function broadcastConnectivityStatus() {
+  apiLastCheckTime = new Date().toISOString()
+  const payload = { status: apiConnectionStatus, lastCheck: apiLastCheckTime }
+  // Send to all renderer windows
+  const { BrowserWindow } = require('electron')
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send('api:connectivity-changed', payload)
+  }
+}
+
+async function startApiHeartbeat() {
+  // Initial check
+  const alive = await checkApiConnectivity()
+  if (alive) {
+    apiConnectionStatus = 'connected'
+    apiRetryCount = 0
+    console.log('[HEARTBEAT] ✅ API connected')
+  } else {
+    apiConnectionStatus = 'disconnected'
+    console.log('[HEARTBEAT] ❌ API not reachable — will retry')
+  }
+  broadcastConnectivityStatus()
+
+  // Schedule periodic checks
+  const scheduleNext = () => {
+    if (apiHeartbeatTimer) clearTimeout(apiHeartbeatTimer)
+
+    const delay = apiConnectionStatus === 'connected'
+      ? API_HEARTBEAT_INTERVAL
+      : API_BACKOFF_SCHEDULE[Math.min(apiRetryCount, API_BACKOFF_SCHEDULE.length - 1)]
+
+    apiHeartbeatTimer = setTimeout(async () => {
+      const wasConnected = apiConnectionStatus === 'connected'
+      const alive = await checkApiConnectivity()
+
+      if (alive) {
+        if (!wasConnected) {
+          console.log(`[HEARTBEAT] ✅ API reconnected after ${apiRetryCount} retries`)
+        }
+        apiConnectionStatus = 'connected'
+        apiRetryCount = 0
+      } else {
+        apiRetryCount++
+        apiConnectionStatus = wasConnected ? 'reconnecting' : 'reconnecting'
+        const nextDelay = API_BACKOFF_SCHEDULE[Math.min(apiRetryCount, API_BACKOFF_SCHEDULE.length - 1)]
+        console.log(`[HEARTBEAT] ⚠️ API unreachable — retry #${apiRetryCount} in ${nextDelay / 1000}s`)
+      }
+
+      broadcastConnectivityStatus()
+      scheduleNext()
+    }, delay)
+  }
+
+  scheduleNext()
 }
 
 // Set up IPC handlers for measurement operations
@@ -699,7 +1033,7 @@ function setupMeasurementHandlers() {
     const path = await import('path')
     const fs = await import('fs')
 
-    const tempMeasureDir = path.join(process.env.APP_ROOT!, 'temp_measure')
+    const tempMeasureDir = path.join(process.env.APP_ROOT!, 'runtime', 'temp_measure')
 
     console.log('[MAIN] Saving files to temp_measure folder:', tempMeasureDir)
 

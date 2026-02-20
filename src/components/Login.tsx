@@ -12,7 +12,7 @@ export const Login: React.FC = () => {
         useRef<HTMLInputElement>(null),
         useRef<HTMLInputElement>(null)
     ]
-    const { login, error } = useAuth()
+    const { login, error, serviceStatus } = useAuth()
 
     useEffect(() => {
         // Focus first box on mount
@@ -60,20 +60,34 @@ export const Login: React.FC = () => {
     return (
         <div className="min-h-screen flex items-center justify-center bg-white p-4 font-sans animate-fade-in overflow-hidden">
             <div className={`w-full max-w-sm card p-10 flex flex-col items-center transition-all duration-500 ${isShaking ? 'animate-shake' : ''} ${isSuccess ? 'animate-success-exit' : ''}`}>
-                {/* MAGIC QC LOGO */}
-                <div className="flex items-center space-x-3 mb-10">
-                    <div className="w-12 h-12 bg-primary rounded-md flex items-center justify-center shadow-md">
-                        <span className="text-white font-bold text-xl">MQ</span>
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-bold text-primary tracking-tighter">MAGIC QC</h1>
-                        <p className="text-[10px] text-secondary font-bold uppercase tracking-[0.2em] -mt-1">
-                            v4.0 Finalized
-                        </p>
-                    </div>
+                {/* MAGIC QC LOGO — centered, no duplicate text */}
+                <div className="mb-10 flex justify-center">
+                    <img src="./MagicQC logo.png" alt="MagicQC" className="h-16 w-auto object-contain" />
                 </div>
 
-                <h2 className="text-sm font-bold text-secondary uppercase tracking-widest mb-8">Operator PIN Login</h2>
+                <h2 className="text-sm font-bold text-secondary uppercase tracking-widest mb-4">Operator PIN Login</h2>
+
+                {/* Service connectivity indicator */}
+                <div className="mb-6 flex items-center gap-2 text-xs font-medium">
+                    {serviceStatus === 'checking' && (
+                        <>
+                            <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></div>
+                            <span className="text-amber-500">Connecting to server...</span>
+                        </>
+                    )}
+                    {serviceStatus === 'available' && (
+                        <>
+                            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                            <span className="text-emerald-600">Server connected</span>
+                        </>
+                    )}
+                    {serviceStatus === 'unavailable' && (
+                        <>
+                            <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                            <span className="text-red-500">Server unreachable — check connection</span>
+                        </>
+                    )}
+                </div>
 
                 <form onSubmit={handleLogin} className="w-full flex flex-col items-center">
                     {/* PIN Input Boxes */}
@@ -107,8 +121,8 @@ export const Login: React.FC = () => {
                         type="submit"
                         disabled={pin.join('').length !== 4 || isLoggingIn || isSuccess}
                         className={`w-full btn-industrial flex items-center justify-center py-4 text-sm shadow-md transition-all duration-300 ${isSuccess
-                                ? 'bg-success text-white scale-95 opacity-50'
-                                : 'bg-primary text-white hover:bg-slate-800 active:scale-[0.98] disabled:bg-slate-100 disabled:text-slate-400'
+                            ? 'bg-success text-white scale-95 opacity-50'
+                            : 'bg-primary text-white hover:bg-slate-800 active:scale-[0.98] disabled:bg-slate-100 disabled:text-slate-400'
                             }`}
                     >
                         {isLoggingIn ? (

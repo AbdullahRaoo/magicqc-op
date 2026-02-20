@@ -35,9 +35,14 @@ release
 __pycache__/
 *.pyc
 *.pyo
+python-core/dist/
+python-core/build/
+*.spec
 
 # Runtime directories (created at runtime, not versioned)
+runtime/
 temp_measure/
 temp_annotations/
 measurement_results/
 storage/
+secure/

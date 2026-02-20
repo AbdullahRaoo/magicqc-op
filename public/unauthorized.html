@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MagicQC — Unauthorized Device</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, #0a0e27 0%, #1a1040 50%, #0d1117 100%);
+      color: #e0e0e0;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    .container {
+      text-align: center;
+      max-width: 560px;
+      padding: 48px 40px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 70, 70, 0.25);
+      border-radius: 20px;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 0 80px rgba(255, 50, 50, 0.08), 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    .shield-icon {
+      font-size: 72px;
+      margin-bottom: 16px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 0.9; }
+      50% { transform: scale(1.05); opacity: 1; }
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #ff4c4c;
+      margin-bottom: 12px;
+      letter-spacing: -0.5px;
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: #a0a0b8;
+      line-height: 1.6;
+      margin-bottom: 32px;
+    }
+
+    .fingerprint-box {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 28px;
+    }
+
+    .fingerprint-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #6a6a8a;
+      margin-bottom: 8px;
+    }
+
+    .fingerprint-value {
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 13px;
+      color: #ff8888;
+      word-break: break-all;
+      line-height: 1.5;
+    }
+
+    .reason-box {
+      background: rgba(255, 70, 70, 0.08);
+      border: 1px solid rgba(255, 70, 70, 0.15);
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin-bottom: 28px;
+      font-size: 13px;
+      color: #ff9999;
+      line-height: 1.5;
+    }
+
+    .contact {
+      font-size: 13px;
+      color: #6a6a8a;
+      line-height: 1.6;
+    }
+
+    .contact strong {
+      color: #8888cc;
+    }
+
+    .version {
+      margin-top: 24px;
+      font-size: 11px;
+      color: #3a3a5a;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="shield-icon">🛡️</div>
+    <h1>Unauthorized Device</h1>
+    <p class="subtitle">
+      This installation of MagicQC is not licensed for this hardware.<br>
+      The application cannot start on unregistered devices.
+    </p>
+
+    <div class="reason-box" id="reasonBox" style="display: none;"></div>
+
+    <div class="fingerprint-box">
+      <div class="fingerprint-label">Device Fingerprint</div>
+      <div class="fingerprint-value" id="fingerprint">—</div>
+    </div>
+
+    <p class="contact">
+      Please contact your <strong>system administrator</strong><br>
+      and provide the device fingerprint shown above.
+    </p>
+
+    <div class="version">MagicQC Industrial Protection v1.0</div>
+  </div>
+
+  <script>
+    // The main process will inject fingerprint and reason via query params
+    const params = new URLSearchParams(window.location.search);
+    const fp = params.get('fp');
+    const reason = params.get('reason');
+
+    if (fp) {
+      document.getElementById('fingerprint').textContent = fp;
+    }
+    if (reason) {
+      const box = document.getElementById('reasonBox');
+      box.textContent = reason;
+      box.style.display = 'block';
+    }
+  </script>
+</body>
+</html>

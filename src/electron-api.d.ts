@@ -4,6 +4,10 @@ interface MagicQCAPI {
     // Connection (REST)
     ping: () => Promise<{ success: boolean; message?: string; error?: string }>
 
+    // Connectivity heartbeat
+    getConnectivity: () => Promise<{ status: 'connected' | 'reconnecting' | 'disconnected'; lastCheck: string }>
+    onConnectivityChanged: (callback: (event: any, data: { status: string; lastCheck: string }) => void) => () => void
+
     // Brands / Article Types / Articles cascade (GraphQL)
     getBrands: () => Promise<{ success: boolean; data?: Array<{ id: number; name: string }>; error?: string }>
     getArticleTypes: (brandId: number) => Promise<{ success: boolean; data?: Array<{ id: number; name: string }>; error?: string }>
@@ -41,8 +45,8 @@ interface MagicQCAPI {
         success: boolean; data?: Array<{
             id: number; measurement_id?: number; code: string; measurement: string;
             expected_value: number; tol_plus: number; tol_minus: number;
-            side?: string; size?: string; article_id?: number
-            sizes?: Array<{ size: string; value: number }>
+            side?: string; size?: string; article_id?: number; unit?: string
+            sizes?: Array<{ size: string; value: number; unit?: string }>
         }>; error?: string
     }>
     getAvailableSizes: (articleId: number) => Promise<{ success: boolean; data?: string[]; error?: string }>

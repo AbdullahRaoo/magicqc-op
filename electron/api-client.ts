@@ -63,7 +63,8 @@ export interface MeasurementSpec {
     tol_minus: number
     side?: string
     article_id?: number
-    sizes: Array<{ size: string; value: number }>
+    unit?: string
+    sizes: Array<{ size: string; value: number; unit?: string }>
 }
 
 export interface MeasurementResult {
@@ -138,40 +139,73 @@ class MagicQCApiClient {
         graphqlQuery: string,
         variables?: Record<string, any>
     ): Promise<GraphQLResponse<T>> {
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 20000) // 20s timeout
+        const MAX_RETRIES = 2
+        const RETRY_DELAYS = [2000, 5000] // ms
+        let lastError: Error | null = null
 
-        try {
-            const response = await fetch(this.graphqlUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-API-Key': this.apiKey,
-                },
-                body: JSON.stringify({ query: graphqlQuery, variables }),
-                signal: controller.signal,
-            })
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            const controller = new AbortController()
+            const timeout = setTimeout(() => controller.abort(), 30000) // 30s timeout (increased for slow networks)
 
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+            try {
+                const response = await fetch(this.graphqlUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': this.apiKey,
+                    },
+                    body: JSON.stringify({ query: graphqlQuery, variables }),
+                    signal: controller.signal,
+                })
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+                }
+
+                const result: GraphQLResponse<T> = await response.json()
+
+                if (result.errors && result.errors.length > 0) {
+                    const messages = result.errors.map(e => e.message).join('; ')
+                    // GraphQL schema/validation errors — do NOT retry (won't resolve)
+                    throw new Error(`GraphQL Error: ${messages}`)
+                }
+
+                return result
+            } catch (error: any) {
+                clearTimeout(timeout)
+
+                // GraphQL errors are not retryable (schema/validation issues)
+                if (error.message?.startsWith('GraphQL Error:')) {
+                    throw error
+                }
+
+                lastError = error
+
+                // Network errors — retry with backoff
+                const isNetworkError =
+                    error.name === 'AbortError' ||
+                    error.message?.includes('ECONNREFUSED') ||
+                    error.message?.includes('ETIMEDOUT') ||
+                    error.message?.includes('fetch failed') ||
+                    error.message?.includes('network')
+
+                if (isNetworkError && attempt < MAX_RETRIES) {
+                    const delay = RETRY_DELAYS[attempt] || 5000
+                    console.log(`[API] ⚠️ Network error (attempt ${attempt + 1}/${MAX_RETRIES + 1}): ${error.message}. Retrying in ${delay / 1000}s...`)
+                    await new Promise(resolve => setTimeout(resolve, delay))
+                    continue
+                }
+
+                if (error.name === 'AbortError') {
+                    throw new Error('GraphQL request timed out (30s). Server may be unreachable.')
+                }
+                throw error
+            } finally {
+                clearTimeout(timeout)
             }
-
-            const result: GraphQLResponse<T> = await response.json()
-
-            if (result.errors && result.errors.length > 0) {
-                const messages = result.errors.map(e => e.message).join('; ')
-                throw new Error(`GraphQL Error: ${messages}`)
-            }
-
-            return result
-        } catch (error: any) {
-            if (error.name === 'AbortError') {
-                throw new Error('GraphQL request timed out (20s). Server may be unreachable.')
-            }
-            throw error
-        } finally {
-            clearTimeout(timeout)
         }
+
+        throw lastError || new Error('All retry attempts failed')
     }
 
     // ──── Core REST method (for endpoints that remain REST) ──────────────────
@@ -400,22 +434,62 @@ class MagicQCApiClient {
     // ──── Measurement Specs (GraphQL) ────────────────────────────────────────
 
     async getMeasurementSpecs(articleId: number, size: string): Promise<MeasurementSpec[]> {
-        const { data } = await this.query<{
-            measurements: Array<{
-                id: string; code: string; measurement: string
-                tol_plus: number; tol_minus: number; side?: string
-                sizes: Array<{ size: string; value: number }>
-            }>
-        }>(`{
-            measurements(article_id: ${articleId}) {
-                id code measurement tol_plus tol_minus side
-                sizes { size value }
+        // Try fetching with unit field first; if schema doesn't have it, retry without
+        let data: any = null
+        let hasUnitField = true
+
+        try {
+            const result = await this.query<{
+                measurements: Array<{
+                    id: string; code: string; measurement: string
+                    tol_plus: number; tol_minus: number; side?: string; unit?: string
+                    sizes: Array<{ size: string; value: number; unit?: string }>
+                }>
+            }>(`{
+                measurements(article_id: ${articleId}) {
+                    id code measurement tol_plus tol_minus side unit
+                    sizes { size value unit }
+                }
+            }`)
+            data = result.data
+        } catch (err: any) {
+            // If GraphQL rejects 'unit' field, retry without it
+            if (err?.message?.includes('unit')) {
+                console.log('[SPECS] "unit" field not in GraphQL schema — retrying without it')
+                hasUnitField = false
+                const result = await this.query<{
+                    measurements: Array<{
+                        id: string; code: string; measurement: string
+                        tol_plus: number; tol_minus: number; side?: string
+                        sizes: Array<{ size: string; value: number }>
+                    }>
+                }>(`{
+                    measurements(article_id: ${articleId}) {
+                        id code measurement tol_plus tol_minus side
+                        sizes { size value }
+                    }
+                }`)
+                data = result.data
+            } else {
+                throw err
             }
-        }`)
+        }
+
+        console.log(`[SPECS] getMeasurementSpecs(article=${articleId}, size=${size}) → ${(data?.measurements || []).length} measurements, unitField=${hasUnitField}`)
+        if (data?.measurements?.[0]) {
+            console.log('[SPECS] Sample measurement keys:', Object.keys(data.measurements[0]).join(', '))
+            console.log('[SPECS] Sample measurement unit:', (data.measurements[0] as any).unit ?? '(not present)')
+            if (data.measurements[0].sizes?.[0]) {
+                console.log('[SPECS] Sample size keys:', Object.keys(data.measurements[0].sizes[0]).join(', '))
+                console.log('[SPECS] Sample size unit:', (data.measurements[0].sizes[0] as any).unit ?? '(not present)')
+            }
+        }
 
         // Filter sizes to the requested size and flatten into spec format
-        return (data?.measurements || []).map(m => {
-            const sizeEntry = m.sizes.find(s => s.size === size)
+        return (data?.measurements || []).map((m: any) => {
+            const sizeEntry = m.sizes.find((s: any) => s.size === size)
+            // Unit priority: measurement-level unit → size-level unit → undefined (show no label)
+            const resolvedUnit = m.unit || sizeEntry?.unit || undefined
             return {
                 id: parseInt(m.id),
                 measurement_id: parseInt(m.id),
@@ -426,12 +500,13 @@ class MagicQCApiClient {
                 tol_minus: m.tol_minus,
                 side: m.side,
                 article_id: articleId,
+                unit: resolvedUnit,
                 size,
                 sizes: m.sizes,
             }
-        }).filter(spec => {
+        }).filter((spec: any) => {
             // Only return specs that have a value for the requested size
-            const sizeEntry = spec.sizes.find(s => s.size === size)
+            const sizeEntry = spec.sizes.find((s: any) => s.size === size)
             return sizeEntry !== undefined
         })
     }
@@ -613,46 +688,112 @@ class MagicQCApiClient {
     }
 
     // ──── Operator PIN Verification (GraphQL mutation) ───────────────────────
+    //
+    // The backend verifyPin mutation requires TWO separate fields:
+    //   employee_id  — the operator's DB employee_id (e.g. "2691")
+    //   pin          — the 4-digit PIN set in Admin Panel (e.g. "0002")
+    //
+    // The login screen only collects the PIN, so we:
+    //   1. Fetch all operators to get their employee_ids
+    //   2. Try verifyPin(employee_id, pin) for each until one succeeds
+    //   3. This matches the PIN against the correct operator in real-time
 
-    async verifyPin(pin: string, employeeId?: string): Promise<{
+    async verifyPin(pin: string): Promise<{
         success: boolean
         operator?: OperatorInfo
         message?: string
     }> {
-        // If employee_id provided, use it; otherwise search by pin only
-        const args = employeeId
-            ? `employee_id: "${employeeId}", pin: "${pin}"`
-            : `pin: "${pin}"`
+        console.log(`[AUTH] verifyPin called with pin: ****`)
+        console.log(`[AUTH] GraphQL endpoint: ${this.graphqlUrl}`)
 
-        const { data } = await this.query<{
-            verifyPin: {
-                success: boolean
-                message: string
-                operator: { id: string; full_name: string; employee_id: string; department: string } | null
-            }
-        }>(`
-            mutation {
-                verifyPin(${args}) {
-                    success message
-                    operator { id full_name employee_id department }
+        // Step 1: Fetch all operators to get their employee_ids
+        let operators: OperatorInfo[] = []
+        try {
+            operators = await this.getOperators()
+            console.log(`[AUTH] Fetched ${operators.length} operators: ${operators.map(o => `${o.full_name}(${o.employee_id})`).join(', ')}`)
+        } catch (err) {
+            console.error('[AUTH] Failed to fetch operators list:', err)
+        }
+
+        // Step 2: Try verifyPin for each operator's employee_id with the entered PIN
+        for (const op of operators) {
+            console.log(`[AUTH] Trying verifyPin(employee_id: "${op.employee_id}", pin: "****") for ${op.full_name}...`)
+            try {
+                const { data } = await this.query<{
+                    verifyPin: {
+                        success: boolean
+                        message: string
+                        operator: { id: string; full_name: string; employee_id: string; department: string } | null
+                    }
+                }>(`
+                    mutation {
+                        verifyPin(employee_id: "${op.employee_id}", pin: "${pin}") {
+                            success message
+                            operator { id full_name employee_id department }
+                        }
+                    }
+                `)
+
+                const result = data?.verifyPin
+                console.log(`[AUTH] verifyPin response for ${op.employee_id}:`, JSON.stringify(result, null, 2))
+
+                if (result?.success && result.operator) {
+                    console.log(`[AUTH] ✅ PIN matched operator: ${result.operator.full_name}`)
+                    return {
+                        success: true,
+                        message: result.message,
+                        operator: {
+                            id: parseInt(result.operator.id),
+                            full_name: result.operator.full_name,
+                            employee_id: result.operator.employee_id,
+                            department: result.operator.department,
+                        },
+                    }
                 }
-            }
-        `)
-
-        const result = data?.verifyPin
-        if (result?.success && result.operator) {
-            return {
-                success: true,
-                message: result.message,
-                operator: {
-                    id: parseInt(result.operator.id),
-                    full_name: result.operator.full_name,
-                    employee_id: result.operator.employee_id,
-                    department: result.operator.department,
-                },
+            } catch (err) {
+                console.error(`[AUTH] Error verifying against ${op.employee_id}:`, err)
             }
         }
-        return { success: false, message: result?.message || 'Invalid PIN' }
+
+        // Step 3: If no operator matched, try the PIN directly as employee_id (legacy fallback)
+        if (operators.length === 0) {
+            console.log(`[AUTH] No operators fetched — trying PIN as employee_id directly...`)
+            try {
+                const { data } = await this.query<{
+                    verifyPin: {
+                        success: boolean
+                        message: string
+                        operator: { id: string; full_name: string; employee_id: string; department: string } | null
+                    }
+                }>(`
+                    mutation {
+                        verifyPin(employee_id: "${pin}", pin: "${pin}") {
+                            success message
+                            operator { id full_name employee_id department }
+                        }
+                    }
+                `)
+
+                const result = data?.verifyPin
+                if (result?.success && result.operator) {
+                    return {
+                        success: true,
+                        message: result.message,
+                        operator: {
+                            id: parseInt(result.operator.id),
+                            full_name: result.operator.full_name,
+                            employee_id: result.operator.employee_id,
+                            department: result.operator.department,
+                        },
+                    }
+                }
+            } catch (err) {
+                console.error('[AUTH] Direct PIN-as-employee_id attempt failed:', err)
+            }
+        }
+
+        console.log(`[AUTH] ❌ No operator matched PIN across ${operators.length} operators`)
+        return { success: false, message: 'Invalid PIN. Please try again.' }
     }
 
     // ──── Operators List (GraphQL) ───────────────────────────────────────────

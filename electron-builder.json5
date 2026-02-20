@@ -3,38 +3,50 @@
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
   "appId": "com.magicqc.operatorpannel",
   "asar": true,
+  "asarUnpack": [
+    "node_modules/**/*.node"
+  ],
+  "compression": "maximum",
   "productName": "MagicQC",
+  "icon": "public/icon.ico",
   "directories": {
     "output": "release/${version}"
   },
   "files": [
     "dist",
-    "dist-electron"
+    "dist-electron",
+    "!**/*.map",
+    "!**/node_modules/.cache/**",
+    "!**/*.py",
+    "!**/*.pyc",
+    "!**/__pycache__/**",
+    "!**/*.spec",
+    "!**/python-core/**"
   ],
   "extraResources": [
     {
-      "from": "python-core",
-      "to": "python-core",
-      "filter": ["**/*.py", "!__pycache__/**"]
+      "from": "python-core/dist",
+      "to": "python-core/dist",
+      "filter": ["magicqc_core.exe"]
     },
     {
       "from": ".",
       "to": ".",
       "filter": [
+        ".env",
         "camera_calibration.json",
         "measurement_config.json",
-        "registration_config.json",
-        ".env.example"
+        "registration_config.json"
       ]
+    },
+    {
+      "from": "storage",
+      "to": "runtime/storage",
+      "filter": ["**/*"]
     }
   ],
-  "mac": {
-    "target": [
-      "dmg"
-    ],
-    "artifactName": "${productName}-Mac-${version}-Installer.${ext}"
-  },
   "win": {
+    "icon": "public/icon.ico",
     "target": [
       {
         "target": "nsis",
@@ -43,13 +55,25 @@
         ]
       }
     ],
-    "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
+    "artifactName": "${productName}-Windows-${version}-Setup.${ext}",
+    "forceCodeSigning": false,
+    "signDlls": false
   },
   "nsis": {
     "oneClick": false,
-    "perMachine": false,
+    "perMachine": true,
+    "allowElevation": true,
     "allowToChangeInstallationDirectory": true,
-    "deleteAppDataOnUninstall": false
+    "deleteAppDataOnUninstall": false,
+    "installerIcon": "public/icon.ico",
+    "uninstallerIcon": "public/icon.ico",
+    "shortcutName": "MagicQC"
+  },
+  "mac": {
+    "target": [
+      "dmg"
+    ],
+    "artifactName": "${productName}-Mac-${version}-Installer.${ext}"
   },
   "linux": {
     "target": [

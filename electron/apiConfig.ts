@@ -17,10 +17,14 @@ import dotenv from 'dotenv'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
-// Load .env from project root
+// Load .env from APP_ROOT (set by main.ts before this module is imported)
+// In production: resources/.env  |  In dev: project root/.env
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-dotenv.config({ path: path.resolve(__dirname, '..', '.env') })
+const envPath = process.env.APP_ROOT
+    ? path.resolve(process.env.APP_ROOT, '.env')
+    : path.resolve(__dirname, '..', '.env')
+dotenv.config({ path: envPath })
 
 // ─── MagicQC GraphQL API ─────────────────────────────────────────────────────
 /** GraphQL endpoint URL (e.g. https://magicqc.online/graphql) */

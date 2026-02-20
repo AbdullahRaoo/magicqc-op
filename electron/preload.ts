@@ -69,6 +69,13 @@ contextBridge.exposeInMainWorld('api', {
   // Image fetch base64 (REST — per guide §9)
   fetchImageBase64: (articleStyle: string, size: string, side?: string) =>
     ipcRenderer.invoke('api:fetchImageBase64', articleStyle, size, side),
+
+  // Connectivity status (heartbeat manager)
+  getConnectivity: () => ipcRenderer.invoke('api:connectivity'),
+  onConnectivityChanged: (callback: (event: any, data: { status: string; lastCheck: string }) => void) => {
+    ipcRenderer.on('api:connectivity-changed', callback)
+    return () => ipcRenderer.removeListener('api:connectivity-changed', callback)
+  },
 })
 
 // --------- Expose Measurement API to the Renderer process ---------
