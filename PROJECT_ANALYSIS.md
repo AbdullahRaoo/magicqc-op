@@ -13,7 +13,7 @@ This document provides a thorough analysis of the **Operator Panel** codebase: s
 **Stack:**
 - **Frontend:** React 18 + TypeScript + Vite + Tailwind CSS
 - **Desktop shell:** Electron 30
-- **Backend (local):** Python 3 (Flask API + OpenCV/MindVision camera SDK)
+- **Backend (local):** Python 3 (Flask API + OpenCV/MagicCamera SDK)
 - **Backend (remote):** MagicQC Laravel API (GraphQL + REST) — brands, POs, articles, annotations, measurement results
 
 ---
@@ -46,11 +46,11 @@ operatorPannel-main/
 │   └── electron-api.d.ts     # window.api, window.measurement, window.ipcRenderer
 ├── python-core/              # Measurement & calibration engine
 │   ├── core_main.py          # Entry: Flask API server OR worker (measurement/calibration)
-│   ├── integration.py        # LiveKeypointDistanceMeasurer (OpenCV + MindVision)
+│   ├── integration.py        # LiveKeypointDistanceMeasurer (OpenCV + MagicCamera)
 │   ├── measurement_worker.py # Headless measurement subprocess
 │   ├── calibration_worker.py # Camera calibration subprocess
 │   ├── worker_logger.py      # File logging for workers
-│   └── mvsdk.py              # MindVision camera SDK bindings
+│   └── mvsdk.py              # MagicCamera SDK bindings (MVCAMSDK_X64.dll)
 ├── public/                   # Static assets
 │   ├── icon.ico
 │   ├── MagicQC logo.png
@@ -99,7 +99,7 @@ operatorPannel-main/
 3. **Python**
    - **Flask server** (`core_main.py`): `/health`, `/api/measurement/start|stop|status`, `/api/results/live`, `/api/calibration/*`, etc. Reads/writes `measurement_config.json`, `camera_calibration.json`, and runtime paths.
    - **Measurement start:** accepts keypoints/target_distances/placement_box/image from API (database-first) or falls back to file-based annotations; writes config and spawns **measurement worker** subprocess (`core_main.py --worker measurement`).
-   - **Measurement worker** (`measurement_worker.py`): loads `measurement_config.json`, instantiates `LiveKeypointDistanceMeasurer` from `integration.py`, initializes MindVision camera, loads calibration and annotation, runs `transfer_keypoints_to_live(headless=True)`. Writes live results to `measurement_results/live_measurements.json`.
+   - **Measurement worker** (`measurement_worker.py`): loads `measurement_config.json`, instantiates `LiveKeypointDistanceMeasurer` from `integration.py`, initializes MagicCamera, loads calibration and annotation, runs `transfer_keypoints_to_live(headless=True)`. Writes live results to `measurement_results/live_measurements.json`.
    - **Calibration worker:** separate subprocess for camera calibration (two-point scale); can be launched from UI.
 
 ### 3.2 Key Data Flows
@@ -154,7 +154,7 @@ operatorPannel-main/
 
 ### 5.2 Security (production only)
 
-- **security.ts:** checkForDebugger (execArgv, NODE_OPTIONS, timing), checkForDebugTools (banned process names), checkForDllInjection, checkForVM (hardware/registry hints), checkCameraSDK (MindVision DLL), checkBinaryIntegrity (magicqc_core.exe SHA-256 vs stored hash in runtime/secure). Failures block app or show unauthorized/sdk_missing.
+- **security.ts:** checkForDebugger (execArgv, NODE_OPTIONS, timing), checkForDebugTools (banned process names), checkForDllInjection, checkForVM (hardware/registry hints), checkCameraSDK (MagicCamera DLL), checkBinaryIntegrity (magicqc_core.exe SHA-256 vs stored hash in runtime/secure). Failures block app or show unauthorized/sdk_missing.
 - **license.ts:** First launch creates `license.dat` (AES-256-GCM + HMAC) with hardware fingerprint; subsequent launches validate fingerprint. No network; binding is local.
 - **hwid.ts:** Fingerprint from CPU ID, MAC, motherboard UUID, disk serial (Windows wmic).
 
@@ -182,7 +182,7 @@ operatorPannel-main/
 
 ### 6.2 integration.py (LiveKeypointDistanceMeasurer)
 
-- **Role:** OpenCV + MindVision camera; load calibration (camera_calibration.json), annotation (keypoints, target_distances, placement_box), reference image; run live keypoint transfer (homography/feature matching), compute distances in cm using pixels_per_cm, write live_measurements.json.
+- **Role:** OpenCV + MagicCamera; load calibration (camera_calibration.json), annotation (keypoints, target_distances, placement_box), reference image; run live keypoint transfer (homography/feature matching), compute distances in cm using pixels_per_cm, write live_measurements.json.
 - **Concepts:** Front/back sides, garment color (white/black/other) for gain, corner vs normal keypoints, stabilization, pause, zoom/pan. Large file (~3000+ lines).
 
 ### 6.3 measurement_worker.py
@@ -217,7 +217,7 @@ operatorPannel-main/
 
 - **Dev:** `npm run dev` → Vite dev server + Electron; main loads from source; Python = `python core_main.py`.
 - **Build:** `npm run build` → tsc, vite build, electron-builder. `build:prod` adds obfuscation and `--win`.
-- **Production:** Expects `python-core/dist/magicqc_core.exe` (PyInstaller build of core_main.py) and MindVision SDK on the machine. License and runtime dirs under APP_ROOT.
+- **Production:** Expects `python-core/dist/magicqc_core.exe` (PyInstaller build of core_main.py) and MagicCamera SDK on the machine. License and runtime dirs under APP_ROOT.
 
 ---
 
@@ -230,6 +230,6 @@ operatorPannel-main/
 | Main        | Electron main.ts  | Security, license, Python spawn, API client, measurement proxy, heartbeat |
 | Remote API  | MagicQC Laravel   | GraphQL: brands, POs, articles, specs, results, sessions; REST: ping, operatorFetch, images |
 | Local API   | Flask (Python)    | Measurement start/stop/status, live results, calibration, annotations list |
-| CV / Camera | Python (integration.py + worker) | MindVision camera, keypoint transfer, distances, live_measurements.json |
+| CV / Camera | Python (integration.py + worker) | MagicCamera, keypoint transfer, distances, live_measurements.json |
 
 This document reflects the codebase as of the analysis date and can be updated as the project evolves.
