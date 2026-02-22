@@ -2,6 +2,7 @@
 ; MagicQC — Custom NSIS installer hooks
 ; - Kills running MagicQC processes before install/uninstall
 ; - Chain-runs the MagicCamera SDK installer if needed
+; - Offers "Start on Windows startup" checkbox
 ; ============================================================
 
 ; ── Helper: kill all MagicQC processes ────────────────────────
@@ -47,10 +48,34 @@
     DetailPrint "MagicCamera SDK installation completed."
 
   SkipMagicCamera:
+
+  ; ── Auto-start on Windows startup checkbox ──────────────────
+  MessageBox MB_YESNO|MB_ICONQUESTION \
+    "Would you like MagicQC to start automatically when Windows starts?" \
+    IDYES EnableAutoStart IDNO SkipAutoStart
+
+  EnableAutoStart:
+    ; Write to HKLM Run key (per-machine install → needs the machine-wide key)
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Run" \
+      "MagicQC" '"$INSTDIR\MagicQC.exe"'
+    DetailPrint "MagicQC will start automatically on Windows startup."
+    Goto AutoStartDone
+
+  SkipAutoStart:
+    ; Remove the key in case it was set by a previous install
+    DeleteRegValue HKLM "Software\Microsoft\Windows\CurrentVersion\Run" "MagicQC"
+    DetailPrint "MagicQC will NOT start on Windows startup."
+
+  AutoStartDone:
 !macroend
 
 ; ── customUnInit: runs at the START of uninstallation ─────────
 ; Ensures no running instance blocks file deletion.
 !macro customUnInit
   !insertmacro _KillMagicQC
+!macroend
+
+; ── customUnInstall: cleanup auto-start registry on uninstall ─
+!macro customUnInstall
+  DeleteRegValue HKLM "Software\Microsoft\Windows\CurrentVersion\Run" "MagicQC"
 !macroend

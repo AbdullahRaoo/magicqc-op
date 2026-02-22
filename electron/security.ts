@@ -132,32 +132,18 @@ const VM_SIGNATURES = [
 
 /**
  * Detect virtual machines by querying hardware model and BIOS info.
- * Uses `wmic` on Windows.
+ * Uses a single `wmic` call reading from SystemEnclosure to reduce startup latency.
  */
 export function checkForVM(): SecurityCheckResult {
     try {
-        // Query system model
-        const modelRaw = execSync('wmic computersystem get model', {
-            windowsHide: true,
-            timeout: 5000,
-        }).toString().toLowerCase()
-
-        // Query manufacturer
-        const mfrRaw = execSync('wmic computersystem get manufacturer', {
-            windowsHide: true,
-            timeout: 5000,
-        }).toString().toLowerCase()
-
-        // Query BIOS serial
-        const biosRaw = execSync('wmic bios get serialnumber', {
-            windowsHide: true,
-            timeout: 5000,
-        }).toString().toLowerCase()
-
-        const combined = `${modelRaw} ${mfrRaw} ${biosRaw}`
+        // Single combined query — much faster than 3 separate wmic calls
+        const raw = execSync(
+            'wmic computersystem get model,manufacturer /format:list & wmic bios get serialnumber /format:list',
+            { windowsHide: true, timeout: 8000 }
+        ).toString().toLowerCase()
 
         for (const sig of VM_SIGNATURES) {
-            if (combined.includes(sig)) {
+            if (raw.includes(sig)) {
                 return { safe: false, reason: `Virtual machine detected (${sig})` }
             }
         }
@@ -200,11 +186,18 @@ export function checkCameraSDK(): SecurityCheckResult {
 // ══════════════════════════════════════════════════════════════
 
 /**
- * Compute SHA-256 hash of a file.
+ * Compute SHA-256 hash of a file using streaming (avoids loading entire file into memory).
  */
 function hashFile(filePath: string): string {
-    const data = fs.readFileSync(filePath)
-    return createHash('sha256').update(data).digest('hex')
+    const hash = createHash('sha256')
+    const fd = fs.openSync(filePath, 'r')
+    const buf = Buffer.alloc(64 * 1024) // 64KB chunks
+    let bytesRead: number
+    while ((bytesRead = fs.readSync(fd, buf, 0, buf.length, null)) > 0) {
+        hash.update(buf.subarray(0, bytesRead))
+    }
+    fs.closeSync(fd)
+    return hash.digest('hex')
 }
 
 /**

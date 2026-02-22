@@ -386,7 +386,7 @@ function AppContent() {
 
               {/* About */}
               <div className="text-center text-touch-sm text-slate-400">
-                <p>MagicQC Operator Panel v4.0</p>
+                <p>MagicQC Operator Panel v1.2.2</p>
                 <p>© 2026 MagicQC. All rights reserved.</p>
               </div>
             </div>

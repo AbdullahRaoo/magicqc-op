@@ -1,7 +1,10 @@
 {
   "name": "operatorpannel",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.2.2",
+  "description": "MagicQC Operator Panel - Quality Control Measurement System",
+  "author": "MagicQC",
+  "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "dev": "vite",

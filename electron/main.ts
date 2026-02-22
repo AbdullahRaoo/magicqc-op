@@ -342,7 +342,7 @@ function createWindow(opts?: { fingerprint: string; reason: string } | { sdkMiss
     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }
 
-  win.maximize()
+  win.setFullScreen(true)
 }
 
 // Quit when all windows are closed, except on macOS. There, it's common
@@ -374,9 +374,6 @@ app.whenReady().then(async () => {
       console.log(`   ASAR_ROOT: ${ASAR_ROOT}`)
       console.log(`   Platform: ${process.platform} ${process.arch}`)
     }
-
-    // Clear Chromium cache on startup to prevent corruption-related blank screens
-    await session.defaultSession.clearCache()
 
     // Set up Content Security Policy
     setupCSP()
@@ -542,15 +539,23 @@ app.whenReady().then(async () => {
       }
     }
 
-    // Start Python API server
-    console.log('🚀 Starting application services...')
+    // ── IPC handlers register ONLY after all security gates pass ──
+    // Unauthorized state gets zero IPC bridges (no data access possible)
+    setupApiHandlers()
+    setupMeasurementHandlers()
 
-    const pythonReady = await startPythonServer()
-    if (pythonReady) {
-      console.log('✅ Python measurement server started successfully')
-    } else {
-      console.warn('⚠️ Python server may not be available - measurement features may be limited')
-    }
+    // Create window FIRST so the UI appears instantly while Python boots
+    createWindow()
+
+    // Start Python API server in the background — don't block the UI
+    console.log('🚀 Starting application services...')
+    startPythonServer().then(pythonReady => {
+      if (pythonReady) {
+        console.log('✅ Python measurement server started successfully')
+      } else {
+        console.warn('⚠️ Python server may not be available - measurement features may be limited')
+      }
+    })
 
     // Test MagicQC API connectivity (non-blocking)
     apiClient.ping().then(result => {
@@ -562,14 +567,6 @@ app.whenReady().then(async () => {
     }).catch(err => {
       console.warn('⚠️ MagicQC API unreachable:', err.message)
     })
-
-    // ── IPC handlers register ONLY after all security gates pass ──
-    // Unauthorized state gets zero IPC bridges (no data access possible)
-    setupApiHandlers()
-    setupMeasurementHandlers()
-
-    // Create window (normal app)
-    createWindow()
 
     // ── Process Monitoring: broadcast reconnection status to renderer ──
     // Only declare process "reconnecting" after a sustained absence to avoid

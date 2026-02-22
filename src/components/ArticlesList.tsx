@@ -200,21 +200,6 @@ export function ArticlesList() {
   // Fetch brands on mount
   useEffect(() => {
     fetchBrands()
-    // Don't fetch article types on mount - wait for brand selection
-
-    // DIAGNOSTIC: Check API connectivity on mount
-    const runDiagnostics = async () => {
-      console.log('====== API DIAGNOSTICS ======')
-      try {
-        const pingResult = await window.api.ping()
-        console.log('[DIAG] API connection:', pingResult.success ? 'OK' : 'FAILED')
-      } catch (err) {
-        console.error('[DIAG] API unreachable:', err)
-      }
-      console.log('====== END DIAGNOSTICS ======')
-    }
-
-    runDiagnostics()
   }, [])
 
   // Fetch article types when brand changes
@@ -1037,105 +1022,6 @@ export function ArticlesList() {
       console.error('[MEASUREMENT] Start measurement error:', err)
       setError('Measurement service not responding. Is Python API running?')
       setIsShiftLocked(false) // Reset shift on error
-    }
-  }
-
-  // TEST ANNOTATION: Start measurement with test annotation file from testjson folder
-  const handleTestAnnotationMeasurement = async () => {
-    try {
-      console.log('[TEST] Starting measurement with TEST ANNOTATION from testjson folder...')
-
-      // Keypoints and target distances from testjson/annotation_test.json
-      // These are for the 5472x2752 reference image (matches camera native resolution)
-      const TEST_WIDTH = 5472
-      const TEST_HEIGHT = 2752
-
-      // Keypoints and target distances from testjson/annotation_data.json (SYNCED!)
-      const testKeypoints = [
-        [1806, 1318], [1710, 2024], [3395, 1359], [3465, 2045],
-        [2280, 1144], [2895, 1173], [1809, 2924], [3308, 2945],
-        [2268, 1062], [2225, 3073], [229, 1917], [323, 2135],
-        [3410, 1285], [4849, 2061]
-      ]
-
-      const testTargetDistances = {
-        "1": 20.8524686252755,
-        "2": 20.181240578402498,
-        "3": 18.019047989259654,
-        "4": 43.87601480642671,
-        "5": 58.90287103526992,
-        "6": 6.9748861675833,
-        "7": 47.87395450078443
-      }
-
-      const testPlacementBox = [133, 995, 4903, 3197]
-
-      console.log('[TEST] Test annotation:', testKeypoints.length, 'keypoints,', Object.keys(testTargetDistances).length, 'target distances')
-      console.log('[TEST] Designed for image dimensions:', TEST_WIDTH, 'x', TEST_HEIGHT)
-
-      // Load reference image from testjson folder via IPC
-      let imageData: string | null = null
-      const imageMimeType = 'image/jpeg'
-
-      // Request the test image from Electron main process
-      const testImageResult = await window.measurement.loadTestImage('testjson/reference_image.jpg')
-
-      if (testImageResult.status === 'success' && testImageResult.data) {
-        imageData = testImageResult.data
-        console.log('[TEST] Loaded test reference image from testjson/reference_image.jpg')
-        console.log('[TEST] Image base64 length:', imageData.length)
-      } else {
-        console.log('[TEST] Could not load test image:', testImageResult.message)
-        console.log('[TEST] Falling back to database image...')
-
-        // Fallback: try to get image from API (if any article is selected)
-        const articleStyle = jobCardSummary?.article_style ||
-          articles.find(a => a.id === selectedArticleId)?.article_style
-
-        if (articleStyle && selectedSize) {
-          const imageResult = await window.api.fetchImageBase64(articleStyle, selectedSize)
-          if (imageResult.success && imageResult.image && imageResult.image.data) {
-            imageData = imageResult.image.data
-            console.log('[TEST] Using fallback reference image from API')
-            console.log('[TEST] WARNING: API image dimensions may not match test annotation!')
-          }
-        }
-      }
-
-      if (!imageData) {
-        setError('Could not load test reference image. Ensure testjson/reference_image.jpg exists.')
-        return
-      }
-
-      // Start measurement with test annotation and test image
-      // Since test image is 5472x2752 (same as camera), live frame will resize to match
-      const result = await window.measurement.start({
-        annotation_name: 'TEST',
-        article_style: 'TEST-ANNOTATION',
-        side: 'front',
-        keypoints_pixels: JSON.stringify(testKeypoints),
-        target_distances: JSON.stringify(testTargetDistances),
-        placement_box: JSON.stringify(testPlacementBox),
-        image_width: TEST_WIDTH,
-        image_height: TEST_HEIGHT,
-        annotation_data: undefined,
-        image_data: imageData,
-        image_mime_type: imageMimeType
-      })
-
-      if (result.status === 'success') {
-        setIsMeasurementEnabled(true)
-        setIsPollingActive(true)
-        setError(null)
-        console.log('[TEST] Test annotation measurement started successfully!')
-        console.log('[TEST] Using', testKeypoints.length, 'keypoints for', TEST_WIDTH, 'x', TEST_HEIGHT, 'image')
-        console.log('[TEST] Live frame will be resized to match reference image dimensions')
-      } else {
-        setError(result.message || 'Failed to start test measurement')
-      }
-    } catch (err) {
-      console.error('[TEST] Test annotation measurement error:', err)
-      setError('Test measurement failed: ' + (err instanceof Error ? err.message : String(err)))
     }
   }
 
@@ -2176,6 +2062,8 @@ export function ArticlesList() {
                   'us polo assn': './company logo/us-polo.jpg',
                   'zara': './company logo/zara.png',
                   'trutex': './company logo/trutex.png',
+                  'original marines': './company logo/original-marines.png',
+                  'original-marines': './company logo/original-marines.png',
                 }
                 const logoPath = logoMap[brand.name.toLowerCase()] || null
 
