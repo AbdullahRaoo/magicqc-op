@@ -386,7 +386,7 @@ class LiveKeypointDistanceMeasurer:
             return False
 
     def initialize_camera(self, headless=False):
-        """Initialize the MindVision camera
+        """Initialize the MagicCamera
         Args:
             headless: If True, skip interactive prompts (use set_garment_color before calling)
         """

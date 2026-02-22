@@ -424,6 +424,21 @@ export function ArticlesList() {
           } else {
             console.log('[POLLING] API returned:', result.status, result.message)
           }
+
+          // Check if the measurement process has failed (camera error, SDK missing, etc.)
+          try {
+            const statusResult = await window.measurement.getStatus()
+            if (statusResult?.data?.status === 'failed') {
+              const errorMsg = statusResult.data.error || 'Measurement process failed unexpectedly.'
+              console.error('[POLLING] Measurement process FAILED:', errorMsg)
+              setError(errorMsg)
+              setIsPollingActive(false)
+              setIsMeasurementEnabled(false)
+              setIsShiftLocked(false)
+            }
+          } catch (statusErr) {
+            // Status check failed — non-fatal, will retry next poll
+          }
         } catch (err) {
           console.error('[POLLING] Error:', err)
         }

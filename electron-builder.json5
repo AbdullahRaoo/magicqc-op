@@ -54,6 +54,14 @@
     // They are created at application startup by main.ts (runtimeDirs block)
     // under the writable STORAGE_ROOT path (userData on Program Files installs).
     // Bundling them would embed dev-time data and cause STORAGE_ROOT path mismatches.
+    ,
+    {
+      // MagicCamera SDK installer — chain-run during NSIS install
+      // Place the MagicCamera setup EXE at: installers/MagicCamera_SDK_Setup.exe
+      "from": "installers",
+      "to": "installers",
+      "filter": ["*.exe"]
+    }
   ],
   "win": {
     "icon": "public/icon.ico",
@@ -79,7 +87,8 @@
     "deleteAppDataOnUninstall": false,
     "installerIcon": "public/icon.ico",
     "uninstallerIcon": "public/icon.ico",
-    "shortcutName": "MagicQC"
+    "shortcutName": "MagicQC",
+    "include": "build/installer.nsh"
   },
   "mac": {
     "target": [

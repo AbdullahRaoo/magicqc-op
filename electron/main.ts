@@ -14,6 +14,10 @@ import {
 } from './security'
 import { loadSecureConfigs, applyEnvConfig } from './config-vault'
 
+// ESM has no __dirname — derive it from import.meta.url
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
 // Get finalized roots from environment (set by env-setup.ts)
 const RESOURCE_ROOT = process.env.APP_ROOT!
 const STORAGE_ROOT = process.env.STORAGE_ROOT!
@@ -35,6 +39,8 @@ let pythonProcess: ChildProcess | null = null
 let pythonLogStream: fs.WriteStream | null = null
 let licenseValid = false   // Tracks whether hardware license passed
 const appState = { isQuitting: false } // Tracks application shutdown status
+let pythonRestartCount = 0
+const PYTHON_MAX_RESTARTS = 5
 
 // ══════════════════════════════════════════════════════════════
 //  SINGLE INSTANCE LOCK — prevent multiple copies running
@@ -157,10 +163,13 @@ async function startPythonServer(isRestart = false): Promise<boolean> {
         pythonLogStream?.write(`${msg}\n`)
         pythonProcess = null
 
-        // Auto-restart logic for production resilience
-        if (!appState.isQuitting) {
-          console.log('🔄 Python core died unexpectedly — triggering auto-restart in 2s...');
+        // Auto-restart logic for production resilience (capped to prevent infinite loops)
+        if (!appState.isQuitting && pythonRestartCount < PYTHON_MAX_RESTARTS) {
+          pythonRestartCount++
+          console.log(`🔄 Python core died unexpectedly — triggering auto-restart in 2s... (attempt ${pythonRestartCount}/${PYTHON_MAX_RESTARTS})`);
           setTimeout(() => startPythonServer(true), 2000);
+        } else if (pythonRestartCount >= PYTHON_MAX_RESTARTS) {
+          console.warn(`⛔ Python server failed after ${PYTHON_MAX_RESTARTS} restart attempts — measurement features unavailable`)
         }
       })
 
@@ -417,15 +426,16 @@ app.whenReady().then(async () => {
       }
       securityLog('PASS: Hardware license validated')
 
-      // ── Gate 6: Camera SDK (BLOCKING) ──
+      // ── Gate 6: Camera SDK (NON-BLOCKING) ──
+      // SDK is only needed for live camera measurement, not for app launch.
+      // Let the app start; camera features will fail gracefully at runtime.
       const sdkCheck = checkCameraSDK()
       if (!sdkCheck.safe) {
-        securityLog(`BLOCKED: ${sdkCheck.reason}`)
-        console.error(`🚫 ${sdkCheck.reason}`)
-        createWindow({ sdkMissing: true })
-        return
+        securityLog(`WARNING: ${sdkCheck.reason}`)
+        console.warn(`⚠️ ${sdkCheck.reason} — camera features will be unavailable`)
+      } else {
+        securityLog('PASS: MagicCamera SDK found')
       }
-      securityLog('PASS: MindVision Camera SDK found')
 
       // ── Gate 7: Core binary existence ──
       const exePath = path.join(process.env.APP_ROOT!, 'python-core', 'dist', 'magicqc_core.exe')
@@ -774,10 +784,9 @@ async function checkApiConnectivity(): Promise<boolean> {
 function broadcastConnectivityStatus() {
   apiLastCheckTime = new Date().toISOString()
   const payload = { status: apiConnectionStatus, lastCheck: apiLastCheckTime }
-  // Send to all renderer windows
-  const { BrowserWindow } = require('electron')
-  for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send('api:connectivity-changed', payload)
+  // Send to all renderer windows (BrowserWindow is already imported at top-level)
+  for (const bw of BrowserWindow.getAllWindows()) {
+    bw.webContents.send('api:connectivity-changed', payload)
   }
 }
 

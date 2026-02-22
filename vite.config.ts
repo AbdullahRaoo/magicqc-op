@@ -10,6 +10,12 @@ export default defineConfig({
       overlay: true,
     },
   },
+  build: {
+    // Prevent Vite from adding crossorigin attributes to script/link tags.
+    // In Electron production (file:// protocol), crossorigin causes CORS failures
+    // because file:// has an opaque (null) origin.
+    modulePreload: false,
+  },
   optimizeDeps: {
     esbuildOptions: {
       target: 'es2020',
@@ -20,6 +26,15 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    // Strip `crossorigin` attributes from built HTML.
+    // Electron production loads from file:// protocol where CORS is inapplicable
+    // and crossorigin can cause opaque-origin failures in some Chromium builds.
+    {
+      name: 'electron-strip-crossorigin',
+      transformIndexHtml(html: string) {
+        return html.replace(/ crossorigin/g, '')
+      },
+    },
     electron({
       main: {
         // Shortcut of `build.lib.entry`.

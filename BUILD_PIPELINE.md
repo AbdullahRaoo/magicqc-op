@@ -63,7 +63,7 @@ core_main.py
 
 measurement_worker.py
   └── integration.LiveKeypointDistanceMeasurer
-        ├── cv2, numpy, scipy.ndimage, mvsdk (MindVision SDK)
+        ├── cv2, numpy, scipy.ndimage, mvsdk (MagicCamera SDK)
         ├── PIL (optional)
         └── json, os, time, math, base64
 ```
@@ -90,7 +90,7 @@ Interfaces used by Electron/worker (do not change): `initialize_camera`, `load_a
    - Package installer (NSIS) or portable EXE.
 
 3. **Client PC**  
-   No Node, Python, pip, or compiler. Only the installed app (or portable EXE) and MindVision Camera SDK (existing requirement).
+   No Node, Python, pip, or compiler. Only the installed app (or portable EXE) and MagicCamera SDK (existing requirement).
 
 ---
 

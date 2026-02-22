@@ -117,7 +117,7 @@ class CameraCalibrator:
                 return None
 
     def initialize_camera(self):
-        """Initialize the MindVision camera"""
+        """Initialize the MagicCamera"""
         try:
             CameraSdkInit(1)
             camera_list = CameraEnumerateDevice()

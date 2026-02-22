@@ -902,9 +902,15 @@ def run_api_server():
                         worker_cmd = [sys.executable, '--worker', 'measurement']
                     else:
                         worker_cmd = [sys.executable, os.path.abspath(__file__), '--worker', 'measurement']
+                    # Build popen kwargs but override stdio to capture error output
+                    popen_kw = _hidden_popen_kwargs()
+                    popen_kw['stdout'] = subprocess.PIPE
+                    popen_kw['stderr'] = subprocess.STDOUT  # merge stderr into stdout
+                    popen_kw['stdin'] = subprocess.DEVNULL
+
                     measurement_process = subprocess.Popen(
                         worker_cmd,
-                        **_hidden_popen_kwargs(),
+                        **popen_kw,
                         env={**os.environ, 'PYTHONIOENCODING': 'utf-8'},
                         cwd=STORAGE_ROOT  # writable; PROJECT_ROOT may be read-only in prod
                     )
@@ -912,13 +918,32 @@ def run_api_server():
 
                     measurement_status['status'] = 'running'
 
+                    # Drain stdout so the pipe buffer never fills (would deadlock)
+                    worker_output_lines = []
+                    for raw_line in measurement_process.stdout:
+                        line = raw_line.decode('utf-8', errors='replace').rstrip()
+                        worker_output_lines.append(line)
+                        print(f"[WORKER] {line}")  # echo to Flask log
+
                     measurement_process.wait()
 
                     if measurement_process.returncode == 0:
                         measurement_status['status'] = 'completed'
                     else:
                         measurement_status['status'] = 'failed'
-                        measurement_status['error'] = f'Measurement script exited with code {measurement_process.returncode}'
+                        # Extract a meaningful error from worker output
+                        error_lines = [l for l in worker_output_lines if any(k in l.lower() for k in ['err', 'fail', 'no camera', 'not found', 'fatal', 'exception', 'mvcamsdk', 'dll'])]
+                        if any('no camera' in l.lower() for l in worker_output_lines):
+                            friendly = 'No camera detected. Please connect a MagicCamera and try again.'
+                        elif any('mvcamsdk' in l.lower() or 'magiccamera' in l.lower() or 'mindvision' in l.lower() for l in worker_output_lines):
+                            friendly = 'MagicCamera SDK is not installed. Please install the MagicCamera SDK and restart the application.'
+                        elif any('camerainit failed' in l.lower() for l in worker_output_lines):
+                            friendly = 'Camera initialization failed. Please check the camera connection and try again.'
+                        elif error_lines:
+                            friendly = error_lines[-1]  # last error line
+                        else:
+                            friendly = f'Measurement failed (exit code {measurement_process.returncode})'
+                        measurement_status['error'] = friendly
 
                 except Exception as e:
                     measurement_status['status'] = 'failed'

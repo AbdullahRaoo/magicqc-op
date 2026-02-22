@@ -1,7 +1,13 @@
 import cv2
 import numpy as np
 import math
-from mvsdk import *
+try:
+    from mvsdk import *
+    _MVSDK_AVAILABLE = True
+except (OSError, ImportError) as _sdk_err:
+    # MagicCamera SDK DLL not installed — camera features will fail gracefully
+    print(f"[WARN] MagicCamera SDK not available: {_sdk_err}")
+    _MVSDK_AVAILABLE = False
 import platform
 import json
 import os
@@ -534,12 +540,27 @@ class LiveKeypointDistanceMeasurer:
             return False
 
     def initialize_camera(self, headless=False):
-        """Initialize the MindVision camera
+        """Initialize the MagicCamera
         Args:
             headless: If True, skip interactive prompts (use set_garment_color before calling)
         """
+        if not _MVSDK_AVAILABLE:
+            print("[ERR] MagicCamera SDK (MVCAMSDK_X64.dll) is not installed.")
+            print("[ERR] Please install the MagicCamera SDK and restart the application.")
+            return False
+
         try:
             CameraSdkInit(1)
+        except NameError:
+            # mvsdk import failed entirely (DLL not installed)
+            print("[ERR] MagicCamera SDK (MVCAMSDK_X64.dll) is not installed.")
+            print("[ERR] Please install the MagicCamera SDK and restart the application.")
+            return False
+        except Exception as e:
+            print(f"[ERR] Camera SDK initialization failed: {e}")
+            return False
+
+        try:
             camera_list = CameraEnumerateDevice()
             if len(camera_list) == 0:
                 print("No camera found!")

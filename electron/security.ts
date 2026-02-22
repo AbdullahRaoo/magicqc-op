@@ -173,24 +173,24 @@ export function checkForVM(): SecurityCheckResult {
 //  4. CAMERA SDK ENVIRONMENT CHECK
 // ══════════════════════════════════════════════════════════════
 
-const MINDVISION_SDK_PATHS = [
+const MAGICCAMERA_SDK_PATHS = [
     'C:\\Program Files (x86)\\MindVision',
     'C:\\Program Files\\MindVision',
 ]
 
 /**
- * Verify MindVision Camera SDK is installed.
+ * Verify MagicCamera SDK is installed.
  * Returns safe=true if at least one known path exists.
  */
 export function checkCameraSDK(): SecurityCheckResult {
-    for (const p of MINDVISION_SDK_PATHS) {
+    for (const p of MAGICCAMERA_SDK_PATHS) {
         if (fs.existsSync(p)) {
             return { safe: true, reason: '' }
         }
     }
     return {
         safe: false,
-        reason: 'MindVision Camera SDK not found. Install from C:\\Program Files (x86)\\MindVision\\',
+        reason: 'MagicCamera SDK not found. Please install the MagicCamera SDK.',
     }
 }
 
