@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import type {
   ArticleWithRelations,
@@ -180,6 +180,22 @@ export function ArticlesList() {
     setFailedMeasurements([])
     setShowQCResult(false)
   }
+
+  // Horizontal wheel scroll: converts vertical scroll to horizontal slide
+  // Uses a ref callback to attach a non-passive native listener (React onWheel is passive)
+  const horizontalScrollRef = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return
+    const handler = (e: WheelEvent) => {
+      if (node.scrollWidth > node.clientWidth) {
+        e.preventDefault()
+        node.scrollBy({ left: e.deltaY * 2, behavior: 'smooth' })
+      }
+    }
+    node.addEventListener('wheel', handler, { passive: false })
+    // Cleanup via dataset flag to avoid double-binding
+    ;(node as any).__hwCleanup?.()
+    ;(node as any).__hwCleanup = () => node.removeEventListener('wheel', handler)
+  }, [])
 
   // Fetch brands on mount
   useEffect(() => {
@@ -2134,31 +2150,32 @@ export function ArticlesList() {
               </svg>
               Brand / Client
             </h3>
-            <div className="flex gap-4 overflow-x-auto scrollbar-hide py-2 px-2 -mx-2">
+            <div className="flex gap-4 overflow-x-auto scrollbar-hide py-2 px-2 -mx-2" ref={horizontalScrollRef}>
               {brands.map((brand) => {
-                // Map brand names to logo files
+                // Map brand names to logo files (relative paths for file:// compat)
                 const logoMap: Record<string, string> = {
-                  'nike': '/company logo/black-nike-logo-transparent-background-701751694777156f3ewilq1js.png',
-                  'adidas': '/company logo/Adidas_Logo.svg.png',
-                  'puma': '/company logo/puma.png',
-                  'reebok': '/company logo/Reebok_logo19.png',
-                  'new balance': '/company logo/New_Balance_logo.svg.png',
-                  'under armour': '/company logo/Under_Armour-Logo.wine.png',
-                  'champion': '/company logo/champian.jpg',
-                  'fila': '/company logo/fila-logo-design-history-and-evolution-kreafolk_94ed6bf4-6bfd-44f9-a60c-fd3f570e120e.webp',
-                  'lckr': '/company logo/Lckr-logo.jpg',
-                  'bass pro': '/company logo/basspro.jpg',
-                  'bass pro shops': '/company logo/basspro.jpg',
-                  'basspro': '/company logo/basspro.jpg',
-                  'basspro shops': '/company logo/basspro.jpg',
-                  'bass': '/company logo/basspro.jpg',
-                  'kiabi': '/company logo/kiabi-logo.png',
-                  'pull & bear': '/company logo/pullandbear.png',
-                  'pull and bear': '/company logo/pullandbear.png',
-                  'us polo': '/company logo/us-polo.jpg',
-                  'u.s. polo': '/company logo/us-polo.jpg',
-                  'us polo assn': '/company logo/us-polo.jpg',
-                  'zara': '/company logo/zara.png',
+                  'nike': './company logo/black-nike-logo-transparent-background-701751694777156f3ewilq1js.png',
+                  'adidas': './company logo/Adidas_Logo.svg.png',
+                  'puma': './company logo/puma.png',
+                  'reebok': './company logo/Reebok_logo19.png',
+                  'new balance': './company logo/New_Balance_logo.svg.png',
+                  'under armour': './company logo/Under_Armour-Logo.wine.png',
+                  'champion': './company logo/champian.jpg',
+                  'fila': './company logo/fila-logo-design-history-and-evolution-kreafolk_94ed6bf4-6bfd-44f9-a60c-fd3f570e120e.webp',
+                  'lckr': './company logo/Lckr-logo.jpg',
+                  'bass pro': './company logo/basspro.jpg',
+                  'bass pro shops': './company logo/basspro.jpg',
+                  'basspro': './company logo/basspro.jpg',
+                  'basspro shops': './company logo/basspro.jpg',
+                  'bass': './company logo/basspro.jpg',
+                  'kiabi': './company logo/kiabi-logo.png',
+                  'pull & bear': './company logo/pullandbear.png',
+                  'pull and bear': './company logo/pullandbear.png',
+                  'us polo': './company logo/us-polo.jpg',
+                  'u.s. polo': './company logo/us-polo.jpg',
+                  'us polo assn': './company logo/us-polo.jpg',
+                  'zara': './company logo/zara.png',
+                  'trutex': './company logo/trutex.png',
                 }
                 const logoPath = logoMap[brand.name.toLowerCase()] || null
 
@@ -2206,7 +2223,7 @@ export function ArticlesList() {
             ) : articleTypes.length === 0 ? (
               <div className="text-center py-6 text-slate-400 text-touch-lg">No article types available</div>
             ) : (
-              <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
+              <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1" ref={horizontalScrollRef}>
                 {articleTypes.map((type) => (
                   <button
                     key={type.id}
@@ -2236,7 +2253,7 @@ export function ArticlesList() {
             ) : articles.length === 0 ? (
               <div className="text-center py-6 text-slate-400 text-touch-lg">No articles available</div>
             ) : (
-              <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
+              <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1" ref={horizontalScrollRef}>
                 {articles.map((article) => (
                   <button
                     key={article.id}
@@ -2266,7 +2283,7 @@ export function ArticlesList() {
                 Select an article to load sizes
               </div>
             ) : (
-              <div className="flex gap-4 overflow-x-auto scrollbar-hide py-2 px-2 -mx-2">
+              <div className="flex gap-4 overflow-x-auto scrollbar-hide py-2 px-2 -mx-2" ref={horizontalScrollRef}>
                 {availableSizes.map((size) => (
                   <button
                     key={size}

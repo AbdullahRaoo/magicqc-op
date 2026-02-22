@@ -2,10 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Content Security Policy — this is the ONLY CSP in production (file:// protocol bypasses header CSP) -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* wss://localhost:* https://magicqc.online; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none';" />
+    <!-- CSP is enforced via Electron session.webRequest headers (see main.ts setupCSP).
+         A meta-tag CSP with 'self' breaks file:// protocol (null origin in Chromium)
+         so we intentionally do NOT set it here. -->
     <title>MagicQC Operator Panel</title>
     <script>
       // Prevent flash of wrong theme by setting theme before React loads

@@ -8,7 +8,7 @@
   ],
   "compression": "maximum",
   "productName": "MagicQC",
-  "icon": "public/icon.ico",
+  "icon": "public/favicon.ico",
   "directories": {
     "output": "release/${version}"
   },
@@ -64,7 +64,7 @@
     }
   ],
   "win": {
-    "icon": "public/icon.ico",
+    "icon": "public/favicon.ico",
     "target": [
       {
         "target": "nsis",
@@ -85,8 +85,8 @@
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
     "deleteAppDataOnUninstall": false,
-    "installerIcon": "public/icon.ico",
-    "uninstallerIcon": "public/icon.ico",
+    "installerIcon": "public/favicon.ico",
+    "uninstallerIcon": "public/favicon.ico",
     "shortcutName": "MagicQC",
     "include": "build/installer.nsh"
   },

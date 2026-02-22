@@ -1502,4 +1502,27 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except SystemExit:
+        raise  # Allow sys.exit() to propagate normally
+    except Exception as _fatal:
+        # Log to file instead of showing a Windows error dialog popup.
+        # PyInstaller --noconsole still shows an "Unhandled exception" dialog
+        # for uncaught exceptions — this prevents that.
+        import traceback as _tb
+        try:
+            _log_dir = os.path.join(
+                os.environ.get('MAGICQC_STORAGE_ROOT', ''),
+                'logs'
+            ) or os.path.join(
+                os.environ.get('LOCALAPPDATA', os.path.dirname(os.path.abspath(sys.executable))),
+                'MagicQC', 'logs'
+            )
+            os.makedirs(_log_dir, exist_ok=True)
+            with open(os.path.join(_log_dir, 'crash.log'), 'a') as _f:
+                _f.write(f'\n[{__import__("datetime").datetime.now().isoformat()}] FATAL CRASH\n')
+                _tb.print_exc(file=_f)
+        except Exception:
+            pass  # Last resort: silently die rather than show popup
+        sys.exit(1)

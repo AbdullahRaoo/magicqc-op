@@ -26,10 +26,39 @@ else:
     _CORE_DIR = os.path.dirname(os.path.abspath(__file__))
     PROJECT_ROOT = os.path.dirname(_CORE_DIR)
 
-# Support writable path redirection for Program Files installs
+# Support writable path redirection for Program Files installs.
+# Cascade: env var → PROJECT_ROOT → user's AppData/Local → system temp
 STORAGE_ROOT = os.environ.get('MAGICQC_STORAGE_ROOT', PROJECT_ROOT)
-LOG_DIR = os.path.join(STORAGE_ROOT, 'logs')
-os.makedirs(LOG_DIR, exist_ok=True)
+
+def _resolve_log_dir():
+    """Find a writable directory for log files."""
+    candidates = [
+        os.path.join(STORAGE_ROOT, 'logs'),
+        os.path.join(PROJECT_ROOT, 'logs'),
+    ]
+    # AppData\Local\MagicQC\logs — always writable on Windows
+    _appdata = os.environ.get('LOCALAPPDATA')
+    if _appdata:
+        candidates.append(os.path.join(_appdata, 'MagicQC', 'logs'))
+    # Last resort: system temp
+    import tempfile
+    candidates.append(os.path.join(tempfile.gettempdir(), 'MagicQC', 'logs'))
+
+    for d in candidates:
+        try:
+            os.makedirs(d, exist_ok=True)
+            # Verify we can actually write
+            _test = os.path.join(d, '.write_test')
+            with open(_test, 'w') as f:
+                f.write('ok')
+            os.remove(_test)
+            return d
+        except (PermissionError, OSError):
+            continue
+    # Absolute fallback — should never reach here
+    return candidates[-1]
+
+LOG_DIR = _resolve_log_dir()
 
 
 class _LoggerWriter:

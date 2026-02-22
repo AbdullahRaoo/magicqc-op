@@ -3,7 +3,7 @@ import { app, BrowserWindow, ipcMain, session } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import fs from 'node:fs'
-import { spawn, ChildProcess } from 'node:child_process'
+import { spawn, execSync, ChildProcess } from 'node:child_process'
 import { PYTHON_API_URL, MAGICQC_API_BASE, MAGICQC_API_KEY } from './apiConfig'
 import { apiClient } from './api-client'
 import { getFingerprint } from './hwid'
@@ -33,6 +33,28 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(ASAR_ROOT, 'public') :
 
 // Global dev/prod flag — used throughout for conditional behavior
 const isDev = !app.isPackaged
+
+// ── Suppress error popups in production ──────────────────────
+// Prevent Electron from showing native OS error dialogs to end users.
+// Errors are logged to STORAGE_ROOT/logs/ instead.
+if (!isDev) {
+  // Suppress the default Electron crash/error dialog
+  import('electron').then(({ dialog }) => {
+    dialog.showErrorBox = (title: string, content: string) => {
+      console.error(`[ErrorBox suppressed] ${title}: ${content}`)
+    }
+  })
+
+  // Catch unhandled promise rejections
+  process.on('unhandledRejection', (reason) => {
+    console.error('[UnhandledRejection]', reason)
+  })
+
+  // Catch uncaught exceptions — log and continue
+  process.on('uncaughtException', (err) => {
+    console.error('[UncaughtException]', err)
+  })
+}
 
 let win: BrowserWindow | null
 let pythonProcess: ChildProcess | null = null
@@ -72,6 +94,14 @@ function securityLog(message: string): void {
 // ── Content Security Policy ─────────────────────────────────
 function setupCSP(): void {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    // In production, Electron loads from file:// protocol where 'self' has an
+    // opaque (null) origin in Chromium — header-based CSP breaks script/style
+    // loading.  The meta-tag CSP in index.html handles production security.
+    // Only inject header CSP for http(s):// requests (dev server, API calls).
+    if (!isDev && details.url.startsWith('file://')) {
+      return callback({ responseHeaders: details.responseHeaders })
+    }
+
     callback({
       responseHeaders: {
         ...details.responseHeaders,
@@ -79,7 +109,7 @@ function setupCSP(): void {
           isDev
             // Dev: permissive — Vite HMR needs inline scripts, eval, and WebSocket
             ? "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws: wss: http://localhost:* http://127.0.0.1:* https://magicqc.online; img-src 'self' data: blob: https:; object-src 'none'"
-            // Prod: strict — no eval, no inline scripts, allow MagicQC API
+            // Prod http(s) requests (e.g. API calls): strict
             : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' http://localhost:* http://127.0.0.1:* https://magicqc.online; img-src 'self' data: blob:; object-src 'none'"
         ],
       },
@@ -203,15 +233,18 @@ async function waitForPythonServer(maxRetries = 30, delay = 500): Promise<boolea
 // Stop Python server
 function stopPythonServer() {
   if (pythonProcess) {
+    const pid = pythonProcess.pid
     console.log('🛑 Stopping Python API server...')
     try {
-      // On Windows, we need to kill the process tree
-      if (process.platform === 'win32') {
-        spawn('taskkill', ['/pid', pythonProcess.pid!.toString(), '/f', '/t'], { windowsHide: true })
+      // On Windows, kill the entire process tree synchronously so it's
+      // dead before Electron exits — prevents orphaned magicqc_core.exe.
+      if (process.platform === 'win32' && pid) {
+        execSync(`taskkill /pid ${pid} /f /t`, { windowsHide: true, timeout: 5000 })
       } else {
         pythonProcess.kill('SIGTERM')
       }
     } catch (error) {
+      // taskkill may fail if process already exited — that's fine
       console.error('Error stopping Python server:', error)
     }
     pythonProcess = null
@@ -226,7 +259,8 @@ function stopPythonServer() {
 
 function createWindow(opts?: { fingerprint: string; reason: string } | { sdkMissing: true }) {
   win = new BrowserWindow({
-    icon: path.join(ASAR_ROOT, 'public', 'icon.ico'),
+    icon: path.join(ASAR_ROOT, 'public', 'favicon.ico'),
+    autoHideMenuBar: true,  // Hide File/Edit/View menu bar
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       nodeIntegration: false,
@@ -234,6 +268,19 @@ function createWindow(opts?: { fingerprint: string; reason: string } | { sdkMiss
       sandbox: false, // Required for preload script to work with contextBridge
       devTools: isDev, // Disable DevTools in production
     },
+  })
+
+  // Remove the application menu entirely in production
+  if (!isDev) {
+    win.setMenu(null)
+  }
+
+  // F11 toggles fullscreen (menu is removed so the default shortcut is gone)
+  win.webContents.on('before-input-event', (_event, input) => {
+    if (input.key === 'F11' && input.type === 'keyDown') {
+      win!.setFullScreen(!win!.isFullScreen())
+      _event.preventDefault()
+    }
   })
 
   // ── Production security: full DevTools & inspection lockdown ──
@@ -262,6 +309,21 @@ function createWindow(opts?: { fingerprint: string; reason: string } | { sdkMiss
   win.webContents.on('did-finish-load', () => {
     win?.webContents.send('main-process-message', (new Date).toLocaleString())
   })
+
+  // Handle renderer crashes gracefully in production
+  if (!isDev) {
+    win.webContents.on('render-process-gone', (_event, details) => {
+      console.error('[RenderProcessGone]', details.reason, details.exitCode)
+      // Attempt to reload the page on crash (not on kill/oom)
+      if (details.reason === 'crashed' || details.reason === 'abnormal-exit') {
+        setTimeout(() => {
+          if (win && !win.isDestroyed()) {
+            win.reload()
+          }
+        }, 2000)
+      }
+    })
+  }
 
   // ── Load the appropriate page ──
   if (opts && 'sdkMissing' in opts) {
@@ -510,20 +572,33 @@ app.whenReady().then(async () => {
     createWindow()
 
     // ── Process Monitoring: broadcast reconnection status to renderer ──
-    if (pythonProcess) {
-      const monitorInterval = setInterval(() => {
-        if (!pythonProcess || pythonProcess.killed || pythonProcess.exitCode !== null) {
-          // Send "Reconnecting" event to all windows
-          for (const win of BrowserWindow.getAllWindows()) {
-            win.webContents.send('python:status-changed', { status: 'reconnecting' })
+    // Only declare process "reconnecting" after a sustained absence to avoid
+    // flashing the banner during brief auto-restart transitions.
+    let pythonDownSince: number | null = null
+    const PYTHON_DOWN_GRACE_MS = 4000 // 4 seconds grace period before showing banner
+    const monitorInterval = setInterval(() => {
+      const isDown = !pythonProcess || pythonProcess.killed || pythonProcess.exitCode !== null
+      if (isDown) {
+        if (!pythonDownSince) pythonDownSince = Date.now()
+        if (Date.now() - pythonDownSince >= PYTHON_DOWN_GRACE_MS) {
+          for (const w of BrowserWindow.getAllWindows()) {
+            w.webContents.send('python:status-changed', { status: 'reconnecting' })
           }
         }
-      }, 2000)
-      app.on('before-quit', () => {
-        appState.isQuitting = true;
-        clearInterval(monitorInterval);
-      })
-    }
+      } else {
+        if (pythonDownSince) {
+          // Python came back — broadcast connected to clear banner
+          pythonDownSince = null
+          for (const w of BrowserWindow.getAllWindows()) {
+            w.webContents.send('python:status-changed', { status: 'connected' })
+          }
+        }
+      }
+    }, 2000)
+    app.on('before-quit', () => {
+      appState.isQuitting = true;
+      clearInterval(monitorInterval);
+    })
   } catch (error) {
     console.error('Failed to start application:', error)
     app.quit()
@@ -1136,6 +1211,22 @@ function setupMeasurementHandlers() {
 }
 
 // Stop Python server when app quits
-app.on('before-quit', async () => {
+app.on('before-quit', () => {
+  appState.isQuitting = true
   stopPythonServer()
+})
+
+// Final safety net: force-exit after cleanup so no zombie renderer processes linger.
+// On Windows, Electron renderer processes can survive app.quit() if the event loop stalls.
+app.on('will-quit', (e) => {
+  // Ensure Python is dead
+  stopPythonServer()
+
+  // Destroy any remaining browser windows
+  for (const w of BrowserWindow.getAllWindows()) {
+    try { w.destroy() } catch { /* already destroyed */ }
+  }
+
+  // Hard exit after a short grace period to guarantee no orphans
+  setTimeout(() => process.exit(0), 500)
 })

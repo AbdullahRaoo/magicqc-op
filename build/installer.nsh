@@ -1,8 +1,25 @@
 ; ============================================================
 ; MagicQC — Custom NSIS installer hooks
-; Chain-runs the MagicCamera SDK installer if needed.
+; - Kills running MagicQC processes before install/uninstall
+; - Chain-runs the MagicCamera SDK installer if needed
 ; ============================================================
 
+; ── Helper: kill all MagicQC processes ────────────────────────
+!macro _KillMagicQC
+  ; Kill the Electron app and all child processes (Python server, etc.)
+  nsExec::ExecToLog 'taskkill /F /IM "MagicQC.exe" /T'
+  nsExec::ExecToLog 'taskkill /F /IM "magicqc_core.exe" /T'
+  ; Give the OS a moment to release file handles
+  Sleep 1500
+!macroend
+
+; ── customInit: runs at the START of installation ─────────────
+; Ensures no running instance blocks file overwrites.
+!macro customInit
+  !insertmacro _KillMagicQC
+!macroend
+
+; ── customInstall: runs AFTER files are copied ────────────────
 !macro customInstall
   ; Check if MagicCamera SDK is already installed
   IfFileExists "$PROGRAMFILES\MindVision\*.*" SkipMagicCamera 0
@@ -30,4 +47,10 @@
     DetailPrint "MagicCamera SDK installation completed."
 
   SkipMagicCamera:
+!macroend
+
+; ── customUnInit: runs at the START of uninstallation ─────────
+; Ensures no running instance blocks file deletion.
+!macro customUnInit
+  !insertmacro _KillMagicQC
 !macroend
