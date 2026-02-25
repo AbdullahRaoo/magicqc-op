@@ -1254,6 +1254,7 @@ class LiveKeypointDistanceMeasurer:
             
             feature_points = []
             scale_factor = 1.0
+            matches = []
             
             if ref_desc is not None and curr_desc is not None and len(ref_desc) > 0 and len(curr_desc) > 0:
                 matches = self.match_features_fast(ref_desc, curr_desc)
@@ -2757,7 +2758,7 @@ class LiveKeypointDistanceMeasurer:
             # Diagnostic: every 30 calls log path, pair mapping, source, side; explicitly call out LEG Opening and Inseam
             self._save_live_call_count = getattr(self, '_save_live_call_count', 0) + 1
             if self._save_live_call_count % 30 == 1:
-                print(f"[LIVE] Write path: {live_file_abs} | side={self.current_side}")
+                print(f"[LIVE] Write path: {results_file} | side={self.current_side}")
                 for e in measurement_data['measurements']:
                     m = measured_by_pair.get(e['id'])
                     src = 'current' if (m and m.get('from_current_frame')) else ('last' if m else 'never')
@@ -2923,6 +2924,8 @@ class LiveKeypointDistanceMeasurer:
                         self.is_keypoints_transferred = True
             
             current_measurements = []
+            valid_points_count = 0
+            current_keypoints = None
             
             if self.is_keypoints_transferred and self.transferred_keypoints:
                 valid_points_count = 0

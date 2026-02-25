@@ -93,7 +93,7 @@ export function checkForDebugTools(): SecurityCheckResult {
     try {
         const raw = execSync('tasklist /FO CSV /NH', {
             windowsHide: true,
-            timeout: 10000,
+            timeout: 3000,
         }).toString().toLowerCase()
 
         for (const tool of BANNED_PROCESSES) {
@@ -139,7 +139,7 @@ export function checkForVM(): SecurityCheckResult {
         // Single combined query — much faster than 3 separate wmic calls
         const raw = execSync(
             'wmic computersystem get model,manufacturer /format:list & wmic bios get serialnumber /format:list',
-            { windowsHide: true, timeout: 8000 }
+            { windowsHide: true, timeout: 3000 }
         ).toString().toLowerCase()
 
         for (const sig of VM_SIGNATURES) {
@@ -289,7 +289,7 @@ export function checkForDllInjection(): SecurityCheckResult {
         const pid = process.pid
         const raw = execSync(`tasklist /FI "PID eq ${pid}" /M /FO CSV /NH`, {
             windowsHide: true,
-            timeout: 10000,
+            timeout: 3000,
         }).toString().toLowerCase()
 
         for (const dll of SUSPICIOUS_DLLS) {

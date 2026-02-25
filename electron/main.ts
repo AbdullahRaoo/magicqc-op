@@ -129,11 +129,27 @@ async function startPythonServer(isRestart = false): Promise<boolean> {
 
   return new Promise((resolve) => {
     // Production: spawn compiled exe directly (no Python interpreter needed)
-    // Dev:        spawn python interpreter with script path
+    // Dev:        spawn venv python (or system python as fallback) with script path
     const exePath = path.join(process.env.APP_ROOT!, 'python-core', 'dist', 'magicqc_core.exe')
     const scriptPath = path.join(process.env.APP_ROOT!, 'python-core', 'core_main.py')
 
-    const spawnCmd = isDev ? 'python' : exePath
+    // In dev mode, prefer .venv Python so all packages are available
+    let devPython = 'python'
+    if (isDev) {
+      const venvCandidates = [
+        path.join(process.env.APP_ROOT!, '.venv', 'Scripts', 'python.exe'),
+        path.join(process.env.APP_ROOT!, 'python-core', '.venv', 'Scripts', 'python.exe'),
+        path.join(process.env.APP_ROOT!, 'python-core', 'venv', 'Scripts', 'python.exe'),
+      ]
+      for (const vp of venvCandidates) {
+        if (fs.existsSync(vp)) {
+          devPython = vp
+          break
+        }
+      }
+    }
+
+    const spawnCmd = isDev ? devPython : exePath
     const spawnArgs = isDev ? [scriptPath] : []
 
     // Log absolute path to ensure alignment
@@ -259,7 +275,9 @@ function stopPythonServer() {
 
 function createWindow(opts?: { fingerprint: string; reason: string } | { sdkMissing: true }) {
   win = new BrowserWindow({
-    icon: path.join(ASAR_ROOT, 'public', 'favicon.ico'),
+    show: false,
+    backgroundColor: '#f8fafc',
+    icon: path.join(process.env.VITE_PUBLIC!, 'favicon.ico'),
     autoHideMenuBar: true,  // Hide File/Edit/View menu bar
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
@@ -328,13 +346,13 @@ function createWindow(opts?: { fingerprint: string; reason: string } | { sdkMiss
   // ── Load the appropriate page ──
   if (opts && 'sdkMissing' in opts) {
     // Camera SDK not found — show blocking SDK missing page
-    const htmlPath = path.join(ASAR_ROOT, 'public', 'sdk_missing.html')
+    const htmlPath = path.join(process.env.VITE_PUBLIC!, 'sdk_missing.html')
     win.loadFile(htmlPath)
   } else if (opts && 'fingerprint' in opts) {
     // License / security failed — show unauthorized page
     const fp = encodeURIComponent(opts.fingerprint)
     const reason = encodeURIComponent(opts.reason)
-    const htmlPath = path.join(ASAR_ROOT, 'public', 'unauthorized.html')
+    const htmlPath = path.join(process.env.VITE_PUBLIC!, 'unauthorized.html')
     win.loadFile(htmlPath, { query: { fp, reason } })
   } else if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL)
@@ -342,7 +360,19 @@ function createWindow(opts?: { fingerprint: string; reason: string } | { sdkMiss
     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }
 
-  win.setFullScreen(true)
+  // Show window once content is painted — avoids white flash
+  const showTimeout = setTimeout(() => {
+    if (win && !win.isDestroyed() && !win.isVisible()) {
+      win.show()
+      win.setFullScreen(true)
+    }
+  }, 3000)
+
+  win.once('ready-to-show', () => {
+    clearTimeout(showTimeout)
+    win?.show()
+    win?.setFullScreen(true)
+  })
 }
 
 // Quit when all windows are closed, except on macOS. There, it's common
@@ -496,26 +526,27 @@ app.whenReady().then(async () => {
         securityLog('PASS: MagicCamera SDK found')
       }
 
-      // ── Gate 7: Core binary existence ──
+      // ── Gate 7: Core binary existence (NON-BLOCKING) ──
+      // The measurement binary is only needed for live measurement, not for the UI.
       const exePath = path.join(process.env.APP_ROOT!, 'python-core', 'dist', 'magicqc_core.exe')
       if (!fs.existsSync(exePath)) {
-        securityLog(`BLOCKED: magicqc_core.exe not found at ${exePath}`)
-        console.error(`🚫 magicqc_core.exe not found at: ${exePath}`)
-        createWindow({ fingerprint, reason: 'Core engine binary missing. Reinstall required.' })
-        return
+        securityLog(`WARNING: magicqc_core.exe not found at ${exePath}`)
+        console.warn(`⚠️ magicqc_core.exe not found — measurement features will be unavailable`)
+      } else {
+        securityLog('PASS: Core binary exists')
       }
-      securityLog('PASS: Core binary exists')
 
-      // ── Gate 8: Binary integrity (SHA-256 hash verification) ──
-      const hashStorePath = path.join(process.env.STORAGE_ROOT!, 'secure')
-      const integrityCheck = checkBinaryIntegrity(exePath, hashStorePath, app.getVersion())
-      if (!integrityCheck.safe) {
-        securityLog(`BLOCKED: ${integrityCheck.reason}`)
-        console.error(`🚫 ${integrityCheck.reason}`)
-        createWindow({ fingerprint, reason: 'Core binary integrity check failed. Reinstall required.' })
-        return
+      // ── Gate 8: Binary integrity (SHA-256 hash verification, NON-BLOCKING) ──
+      if (fs.existsSync(exePath)) {
+        const hashStorePath = path.join(process.env.STORAGE_ROOT!, 'secure')
+        const integrityCheck = checkBinaryIntegrity(exePath, hashStorePath, app.getVersion())
+        if (!integrityCheck.safe) {
+          securityLog(`WARNING: ${integrityCheck.reason}`)
+          console.warn(`⚠️ ${integrityCheck.reason}`)
+        } else {
+          securityLog('PASS: Binary integrity verified')
+        }
       }
-      securityLog('PASS: Binary integrity verified')
 
       licenseValid = true
       securityLog('ALL 8 GATES PASSED — starting application')

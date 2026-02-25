@@ -62,11 +62,13 @@ LOG_DIR = _resolve_log_dir()
 
 
 class _LoggerWriter:
-    """File-like object that forwards write() calls to a logging.Logger."""
+    """File-like object that forwards write() calls to a logging.Logger
+    AND the original stdout/stderr so subprocess PIPE can capture output."""
 
-    def __init__(self, logger: logging.Logger, level: int):
+    def __init__(self, logger: logging.Logger, level: int, original_stream=None):
         self._logger = logger
         self._level = level
+        self._original = original_stream  # keep ref to real stdout/stderr
 
     # -- file-like interface used by print() / tracebacks --
 
@@ -74,10 +76,22 @@ class _LoggerWriter:
         if message and message.strip():
             for line in message.rstrip().splitlines():
                 self._logger.log(self._level, line)
+        # Also write to original stream so subprocess PIPE captures it
+        if self._original is not None:
+            try:
+                self._original.write(message)
+                self._original.flush()
+            except (OSError, ValueError):
+                pass  # original stream closed or broken pipe
 
     def flush(self) -> None:           # noqa: required by file protocol
         for handler in self._logger.handlers:
             handler.flush()
+        if self._original is not None:
+            try:
+                self._original.flush()
+            except (OSError, ValueError):
+                pass
 
     def isatty(self) -> bool:
         return False
@@ -121,9 +135,12 @@ def setup_file_logging(name: str = 'worker', max_bytes: int = 5 * 1024 * 1024,
     if not logger.handlers:
         logger.addHandler(handler)
 
-    # Redirect Python-level stdout / stderr to the file logger.
-    sys.stdout = _LoggerWriter(logger, logging.INFO)
-    sys.stderr = _LoggerWriter(logger, logging.ERROR)
+    # Redirect Python-level stdout / stderr to the file logger,
+    # but keep a tee to the original streams so subprocess PIPE can capture output.
+    _orig_stdout = sys.__stdout__  # use __stdout__ to get the real OS-level stream
+    _orig_stderr = sys.__stderr__
+    sys.stdout = _LoggerWriter(logger, logging.INFO, _orig_stdout)
+    sys.stderr = _LoggerWriter(logger, logging.ERROR, _orig_stderr)
 
     logger.info('='*60)
     logger.info(f'Logger initialised  -  {name}  ->  {log_path}')

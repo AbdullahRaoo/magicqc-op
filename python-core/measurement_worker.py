@@ -115,8 +115,8 @@ def run_headless_measurement():
 
         # Initialize camera in headless mode (skips interactive prompts)
         if not measurer.initialize_camera(headless=True):
-            print("[ERR] Could not initialize camera")
-            sys.exit(1)
+            print("[ERR] No camera found - Could not initialize camera")
+            sys.exit(10)  # Exit code 10 = no camera
 
         # Load calibration if exists
         measurer.load_calibration()
@@ -127,7 +127,7 @@ def run_headless_measurement():
             print(f"[LOAD] Using annotation file: {annotation_json_path}")
         else:
             print(f"[ERR] Annotation file not found: {annotation_json_path}")
-            sys.exit(1)
+            sys.exit(11)  # Exit code 11 = annotation file missing
 
         # Set reference image path
         if reference_image_path and os.path.exists(reference_image_path):
@@ -140,7 +140,7 @@ def run_headless_measurement():
         # Load annotation data
         if not measurer.load_annotation():
             print("[ERR] Failed to load front annotation")
-            sys.exit(1)
+            sys.exit(12)  # Exit code 12 = annotation load failed
 
         # Load reference image
         measurer.load_reference_image()

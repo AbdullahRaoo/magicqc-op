@@ -931,18 +931,28 @@ def run_api_server():
                         measurement_status['status'] = 'completed'
                     else:
                         measurement_status['status'] = 'failed'
-                        # Extract a meaningful error from worker output
-                        error_lines = [l for l in worker_output_lines if any(k in l.lower() for k in ['err', 'fail', 'no camera', 'not found', 'fatal', 'exception', 'mvcamsdk', 'dll'])]
-                        if any('no camera' in l.lower() for l in worker_output_lines):
-                            friendly = 'No camera detected. Please connect a MagicCamera and try again.'
-                        elif any('mvcamsdk' in l.lower() or 'magiccamera' in l.lower() or 'mindvision' in l.lower() for l in worker_output_lines):
-                            friendly = 'MagicCamera SDK is not installed. Please install the MagicCamera SDK and restart the application.'
-                        elif any('camerainit failed' in l.lower() for l in worker_output_lines):
-                            friendly = 'Camera initialization failed. Please check the camera connection and try again.'
-                        elif error_lines:
-                            friendly = error_lines[-1]  # last error line
+                        rc = measurement_process.returncode
+                        # Map distinct exit codes to friendly messages
+                        exit_code_messages = {
+                            10: 'No camera detected. Please connect a MagicCamera and try again.',
+                            11: 'Annotation file not found. Please re-select the article and try again.',
+                            12: 'Failed to load annotation data. The annotation file may be corrupted.',
+                        }
+                        if rc in exit_code_messages:
+                            friendly = exit_code_messages[rc]
                         else:
-                            friendly = f'Measurement failed (exit code {measurement_process.returncode})'
+                            # Fallback: scan worker output for error keywords
+                            error_lines = [l for l in worker_output_lines if any(k in l.lower() for k in ['err', 'fail', 'no camera', 'not found', 'fatal', 'exception', 'mvcamsdk', 'dll'])]
+                            if any('no camera' in l.lower() for l in worker_output_lines):
+                                friendly = 'No camera detected. Please connect a MagicCamera and try again.'
+                            elif any('mvcamsdk' in l.lower() or 'magiccamera' in l.lower() or 'mindvision' in l.lower() for l in worker_output_lines):
+                                friendly = 'MagicCamera SDK is not installed. Please install the MagicCamera SDK and restart the application.'
+                            elif any('camerainit failed' in l.lower() for l in worker_output_lines):
+                                friendly = 'Camera initialization failed. Please check the camera connection and try again.'
+                            elif error_lines:
+                                friendly = error_lines[-1]  # last error line
+                            else:
+                                friendly = f'Measurement failed (exit code {rc})'
                         measurement_status['error'] = friendly
 
                 except Exception as e:
@@ -990,7 +1000,7 @@ def run_api_server():
                     for child in parent.children(recursive=True):
                         child.kill()
                     parent.kill()
-                except:
+                except Exception:
                     pass
 
             measurement_status.update({
@@ -1229,7 +1239,7 @@ def run_api_server():
         if calibration_process:
             try:
                 calibration_process.terminate()
-            except:
+            except Exception:
                 pass
 
         calibration_status = {
@@ -1439,7 +1449,7 @@ def run_api_server():
                     for child in parent.children(recursive=True):
                         child.kill()
                     parent.kill()
-                except:
+                except Exception:
                     pass
 
             registration_status = {
