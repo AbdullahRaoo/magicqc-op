@@ -1,0 +1,18 @@
+2026-02-26 12:36:00 [INFO] ============================================================
+2026-02-26 12:36:00 [INFO] Logger initialised  -  calibration  ->  C:\Users\Eagle\AppData\Roaming\operatorpannel\logs\calibration.log
+2026-02-26 12:36:00 [INFO] ============================================================
+2026-02-26 12:36:01 [INFO] 
+2026-02-26 12:36:01 [INFO] ============================================================
+2026-02-26 12:36:01 [INFO] OPERATOR PANEL - CAMERA CALIBRATION WORKER
+2026-02-26 12:36:01 [INFO] ============================================================
+2026-02-26 12:36:01 [INFO] [OK] Loaded existing calibration: 30.44 px/cm
+2026-02-26 12:36:01 [INFO] [*] Force new calibration mode - skipping prompt
+2026-02-26 12:36:01 [INFO] 
+2026-02-26 12:36:01 [INFO] ============================================================
+2026-02-26 12:36:01 [INFO] CAMERA CALIBRATION - Operator Panel
+2026-02-26 12:36:01 [INFO] ============================================================
+2026-02-26 12:36:01 [INFO] [OK] Found 1 camera(s)
+2026-02-26 12:36:01 [INFO] [OK] Camera opened: 5488x3672
+2026-02-26 12:36:01 [INFO] [OK] Camera initialized successfully
+2026-02-26 12:36:01 [INFO] [OK] Camera ready. Preparing calibration window...
+2026-02-26 12:36:01 [INFO] Press Enter when ready to capture calibration frame...

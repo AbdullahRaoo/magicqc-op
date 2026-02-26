@@ -1,42 +1,9 @@
 
-[2026-02-26T11:40:26.187131] FATAL CRASH
+[2026-02-26T12:36:01.785160] FATAL CRASH
 Traceback (most recent call last):
-  File "core_main.py", line 1516, in <module>
-  File "core_main.py", line 1509, in main
-  File "core_main.py", line 62, in _dispatch_worker
-  File "pyimod02_importers.py", line 457, in exec_module
-  File "measurement_worker.py", line 41, in <module>
-  File "pyimod02_importers.py", line 457, in exec_module
-  File "integration.py", line 15, in <module>
-  File "scipy\__init__.py", line 143, in __getattr__
-  File "importlib\__init__.py", line 88, in import_module
-  File "pyimod02_importers.py", line 457, in exec_module
-  File "scipy\ndimage\__init__.py", line 157, in <module>
-  File "pyimod02_importers.py", line 457, in exec_module
-  File "scipy\ndimage\_support_alternative_backends.py", line 2, in <module>
-  File "pyimod02_importers.py", line 457, in exec_module
-  File "scipy\_lib\_array_api.py", line 47, in <module>
-  File "pyimod02_importers.py", line 457, in exec_module
-  File "scipy\_lib\_docscrape.py", line 6, in <module>
-ModuleNotFoundError: No module named 'pydoc'
-
-[2026-02-26T11:40:29.405451] FATAL CRASH
-Traceback (most recent call last):
-  File "core_main.py", line 1516, in <module>
-  File "core_main.py", line 1509, in main
-  File "core_main.py", line 62, in _dispatch_worker
-  File "pyimod02_importers.py", line 457, in exec_module
-  File "measurement_worker.py", line 41, in <module>
-  File "pyimod02_importers.py", line 457, in exec_module
-  File "integration.py", line 15, in <module>
-  File "scipy\__init__.py", line 143, in __getattr__
-  File "importlib\__init__.py", line 88, in import_module
-  File "pyimod02_importers.py", line 457, in exec_module
-  File "scipy\ndimage\__init__.py", line 157, in <module>
-  File "pyimod02_importers.py", line 457, in exec_module
-  File "scipy\ndimage\_support_alternative_backends.py", line 2, in <module>
-  File "pyimod02_importers.py", line 457, in exec_module
-  File "scipy\_lib\_array_api.py", line 47, in <module>
-  File "pyimod02_importers.py", line 457, in exec_module
-  File "scipy\_lib\_docscrape.py", line 6, in <module>
-ModuleNotFoundError: No module named 'pydoc'
+  File "core_main.py", line 1558, in <module>
+  File "core_main.py", line 1551, in main
+  File "core_main.py", line 68, in _dispatch_worker
+  File "calibration_worker.py", line 552, in main
+  File "calibration_worker.py", line 328, in run_calibration
+EOFError: EOF when reading a line

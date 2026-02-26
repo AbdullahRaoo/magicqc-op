@@ -1,12 +1,60 @@
-[2026-02-26T06:39:57.715Z] === Application startup ===
-[2026-02-26T06:39:57.720Z] PASS: Anti-debug check
-[2026-02-26T06:39:58.406Z] PASS: No debug tools detected
-[2026-02-26T06:39:58.595Z] PASS: No DLL injection detected
-[2026-02-26T06:39:58.652Z] PASS: VM detection check
-[2026-02-26T06:39:58.653Z] SKIP: Hardware license check disabled
-[2026-02-26T06:39:58.654Z] PASS: MagicCamera SDK found
-[2026-02-26T06:39:58.654Z] PASS: Core binary exists
-[2026-02-26T06:39:58.829Z] PASS: Binary integrity verified
-[2026-02-26T06:39:58.830Z] ALL 8 GATES PASSED — starting application
-[2026-02-26T06:39:58.860Z] CONFIG: .env loaded from encrypted vault
-[2026-02-26T06:39:58.861Z] CONFIG: 4 config files loaded securely
+[2026-02-26T07:25:19.026Z] === Application startup ===
+[2026-02-26T07:25:19.031Z] PASS: Anti-debug check
+[2026-02-26T07:25:19.793Z] PASS: No debug tools detected
+[2026-02-26T07:25:19.984Z] PASS: No DLL injection detected
+[2026-02-26T07:25:20.042Z] PASS: VM detection check
+[2026-02-26T07:25:20.042Z] SKIP: Hardware license check disabled
+[2026-02-26T07:25:20.043Z] PASS: MagicCamera SDK found
+[2026-02-26T07:25:20.044Z] PASS: Core binary exists
+[2026-02-26T07:25:20.301Z] PASS: Binary integrity verified
+[2026-02-26T07:25:20.301Z] ALL 8 GATES PASSED — starting application
+[2026-02-26T07:25:20.319Z] CONFIG: .env loaded from encrypted vault
+[2026-02-26T07:25:20.319Z] CONFIG: 4 config files loaded securely
+[2026-02-26T07:27:14.849Z] === Application startup ===
+[2026-02-26T07:27:14.854Z] PASS: Anti-debug check
+[2026-02-26T07:27:15.645Z] PASS: No debug tools detected
+[2026-02-26T07:27:15.847Z] PASS: No DLL injection detected
+[2026-02-26T07:27:15.903Z] PASS: VM detection check
+[2026-02-26T07:27:15.904Z] SKIP: Hardware license check disabled
+[2026-02-26T07:27:15.905Z] PASS: MagicCamera SDK found
+[2026-02-26T07:27:15.906Z] PASS: Core binary exists
+[2026-02-26T07:27:16.075Z] PASS: Binary integrity verified
+[2026-02-26T07:27:16.076Z] ALL 8 GATES PASSED — starting application
+[2026-02-26T07:27:16.081Z] CONFIG: .env loaded from encrypted vault
+[2026-02-26T07:27:16.082Z] CONFIG: 4 config files loaded securely
+[2026-02-26T07:29:33.203Z] === Application startup ===
+[2026-02-26T07:29:33.207Z] PASS: Anti-debug check
+[2026-02-26T07:29:33.894Z] PASS: No debug tools detected
+[2026-02-26T07:29:34.092Z] PASS: No DLL injection detected
+[2026-02-26T07:29:34.151Z] PASS: VM detection check
+[2026-02-26T07:29:34.152Z] SKIP: Hardware license check disabled
+[2026-02-26T07:29:34.153Z] PASS: MagicCamera SDK found
+[2026-02-26T07:29:34.153Z] PASS: Core binary exists
+[2026-02-26T07:29:34.324Z] PASS: Binary integrity verified
+[2026-02-26T07:29:34.325Z] ALL 8 GATES PASSED — starting application
+[2026-02-26T07:29:34.330Z] CONFIG: .env loaded from encrypted vault
+[2026-02-26T07:29:34.331Z] CONFIG: 4 config files loaded securely
+[2026-02-26T08:09:21.580Z] === Application startup ===
+[2026-02-26T08:09:21.586Z] PASS: Anti-debug check
+[2026-02-26T08:09:22.360Z] PASS: No debug tools detected
+[2026-02-26T08:09:22.570Z] PASS: No DLL injection detected
+[2026-02-26T08:09:22.628Z] PASS: VM detection check
+[2026-02-26T08:09:22.629Z] SKIP: Hardware license check disabled
+[2026-02-26T08:09:22.629Z] PASS: MagicCamera SDK found
+[2026-02-26T08:09:22.630Z] PASS: Core binary exists
+[2026-02-26T08:09:22.912Z] PASS: Binary integrity verified
+[2026-02-26T08:09:22.913Z] ALL 8 GATES PASSED — starting application
+[2026-02-26T08:09:22.968Z] CONFIG: .env loaded from encrypted vault
+[2026-02-26T08:09:22.969Z] CONFIG: 4 config files loaded securely
+[2026-02-26T08:41:45.519Z] === Application startup ===
+[2026-02-26T08:41:45.523Z] PASS: Anti-debug check
+[2026-02-26T08:41:46.435Z] PASS: No debug tools detected
+[2026-02-26T08:41:46.659Z] PASS: No DLL injection detected
+[2026-02-26T08:41:46.721Z] PASS: VM detection check
+[2026-02-26T08:41:46.722Z] SKIP: Hardware license check disabled
+[2026-02-26T08:41:46.723Z] PASS: MagicCamera SDK found
+[2026-02-26T08:41:46.724Z] PASS: Core binary exists
+[2026-02-26T08:41:46.905Z] PASS: Binary integrity verified
+[2026-02-26T08:41:46.905Z] ALL 8 GATES PASSED — starting application
+[2026-02-26T08:41:46.912Z] CONFIG: .env loaded from encrypted vault
+[2026-02-26T08:41:46.913Z] CONFIG: 4 config files loaded securely
