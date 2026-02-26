@@ -446,6 +446,38 @@ app.whenReady().then(async () => {
       }
     }
 
+    // ── Startup cache hygiene ────────────────────────────────────
+    // On every launch, clear stale Electron caches and Python temp
+    // files to prevent upgrade issues and reduce disk usage.
+    // User data (storage/, secure/, Local Storage/) is preserved.
+    if (!isDev) {
+      const staleDirs = [
+        'Cache', 'Code Cache', 'GPUCache', 'DawnCache', 'DawnWebGPUCache',
+        'Session Storage', 'blob_storage', 'Service Worker',
+        'Shared Dictionary', 'Network'
+      ]
+      for (const dir of staleDirs) {
+        const dirPath = path.join(STORAGE_ROOT, dir)
+        if (fs.existsSync(dirPath)) {
+          try { fs.rmSync(dirPath, { recursive: true, force: true }) } catch { /* in-use is ok */ }
+        }
+      }
+      // Clear stale temp_measure contents (leftover from previous session)
+      const tempMeasure = path.join(STORAGE_ROOT, 'temp_measure')
+      if (fs.existsSync(tempMeasure)) {
+        try {
+          for (const f of fs.readdirSync(tempMeasure)) {
+            fs.rmSync(path.join(tempMeasure, f), { recursive: true, force: true })
+          }
+        } catch { /* best-effort */ }
+      }
+      // Clear stale validation marker
+      const valFile = path.join(STORAGE_ROOT, 'temp_annotations', '__validation__.json')
+      if (fs.existsSync(valFile)) {
+        try { fs.unlinkSync(valFile) } catch { /* ok */ }
+      }
+      console.log('[Startup] Cache hygiene complete')
+    }
 
     // ══════════════════════════════════════════════════════════════
     //  SECURITY GATES (production only — dev mode bypasses all)
