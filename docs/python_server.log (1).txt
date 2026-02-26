@@ -1,0 +1,497 @@
+
+============================================================
+[2026-02-26T07:00:51.213Z] Python server STARTING
+============================================================
+[OUT] [PATH] PROJECT_ROOT: C:\Program Files\MagicQC\resources
+[PATH] RESULTS_PATH (absolute): C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results
+[OUT] ============================================================
+[START] CAMERA MEASUREMENT API SERVER
+============================================================
+[DIR] Local Storage: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage
+[DIR] Laravel Storage: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage
+[OUT] [PTS] Annotations: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\annotations
+[STAT] Results: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results
+============================================================
+[OUT] [OK] Annotations directory (Laravel): C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\annotations
+[OK] Results directory: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results
+[OUT] [OK] Server starting on http://127.0.0.1:5000
+[API] Laravel can now communicate with the measurement system
+[OUT] * Serving Flask app 'core_main'
+[OUT] * Debug mode: off
+[ERR] WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+[ERR] Press CTRL+C to quit
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:00:55] "GET /health HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:00:56] "GET /api/calibration/status HTTP/1.1" 200 -
+[OUT] [API] Garment color: black, color code: b
+[OUT] [API] Received 13 measurement specs from UI
+[API] Received request for KES_S
+[API] keypoints_pixels present: True
+[API] target_distances present: True
+[API] target_distances value: {"1":22,"2":43,"3":32,"4":44,"5":23}
+[API] image dimensions: 5456x2700
+[API] image_data present: True, length: 1787655
+[DB] Using measurement-ready keypoints_pixels for KES_S
+[OUT] [DB] Reference image actual size: 5456x2700
+[DB] Target size (native camera): 5456x2700
+[OUT] [DB] Image already at target resolution, no upscale needed
+[OUT] [DB] Wrote reference image to: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.jpg (1340724 bytes)
+[OUT] [DB] Image verification PASSED: 5456x2700
+[DB] Loaded 10 keypoints (pixels)
+[OUT] [DB] Loaded 5 target distances
+[DB] Placement box: [1298, 231, 3852, 2257]
+[OUT] [DB] Wrote annotation JSON to: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.json
+[CONFIG] Annotation JSON: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.json
+[OUT] [CONFIG] Reference Image: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.jpg
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:17] "POST /api/measurement/start HTTP/1.1" 200 -
+[OUT] [MEASUREMENT] Started worker with PID: 5040
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:18] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:18] "GET /api/measurement/status HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:18] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:18] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [WORKER] [START] Worker for article: KES, size: S (front)
+[OUT] [WORKER] [PATH] Annotation JSON: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.json
+[WORKER] [PATH] Reference Image: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.jpg
+[WORKER] [PATH] Results: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results
+[OUT] [WORKER] [MODE] Garment Color: black
+[WORKER] [SPECS] Received 13 measurement specs from UI:
+[WORKER]   Pair 1 -> J1: Overarm crown to cuff (expected: 20 cm, db_id: 85)
+[OUT] [WORKER]   Pair 2 -> A1: Chest width 2.5cm below underarm (expected: 48 cm, db_id: 93)
+[WORKER]   Pair 3 -> B1: CB length excl neckband (expected: 62 cm, db_id: 94)
+[OUT] [WORKER]   Pair 4 -> L1: Cuff width (expected: 17.5 cm, db_id: 95)
+[WORKER]   Pair 5 -> D2: Hem width (expected: 48 cm, db_id: 96)
+[OUT] [WORKER]   Pair 6 -> F2: Back neck width seam to seam (expected: 18 cm, db_id: 97)
+[WORKER]   Pair 7 -> G1: Shoulder Length (expected: 16.5 cm, db_id: 98)
+[OUT] [WORKER]   Pair 8 -> H1: Bicep width - 2.5cm from armhole (expected: 19.25 cm, db_id: 99)
+[OUT] [WORKER]   Pair 9 -> E2: CB collar depth (expected: 7 cm, db_id: 100)
+[WORKER]   Pair 10 -> E3: Collar point depth (expected: 6 cm, db_id: 101)
+[WORKER]   Pair 11 -> P2: Planket width (expected: 3 cm, db_id: 102)
+[OUT] [WORKER]   Pair 12 -> P3: Planket length (expected: 12 cm, db_id: 103)
+[WORKER]   Pair 13 -> O3: Half neck (expected: 22.25 cm, db_id: 104)
+[OUT] [WORKER] [CHECK] Reference image: 1340724 bytes, header(hex): ffd8ffe000104a464946000101000001
+[OUT] [WORKER] [CHECK] Valid JPEG header detected
+[OUT] [WORKER] [API] Garment color set to: black
+[WORKER] [LIVE] Will write live_measurements.json to: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json
+[OUT] [WORKER] Found 1 camera(s)
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:19] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:19] "GET /api/measurement/status HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:19] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:19] "GET /api/measurement/status HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:20] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:20] "GET /api/measurement/status HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:20] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:20] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [WORKER] Camera opened successfully: Camera MV-SUA2000C#0001-0003
+[WORKER]
+[OUT] [WORKER] Camera initialized successfully
+[WORKER] [HEADLESS] Skipping interactive garment color prompt
+[OUT] [WORKER] 
+[WORKER]
+[OUT] [WORKER] [LOAD] Using annotation file: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.json
+[WORKER] [LOAD] Using reference image: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.jpg
+[WORKER] [FILE] Reference image size: 1340724 bytes
+[OUT] [WORKER] [COMPAT] Applied legacy type inference: 10 corner, 0 perp, 0 normal
+[WORKER]
+[OUT] [WORKER] 
+[WORKER]    - Corner: 10
+[WORKER]    - Perpendicular: 0
+[OUT] [WORKER]    - Normal: 0
+[WORKER] 
+[WORKER]
+[OUT] [WORKER]
+[OUT] [WORKER]
+[OUT] [WORKER] 
+[WORKER]
+[OUT] [WORKER] [COMPAT] Applied legacy type inference (back): 10 corner, 0 perp, 0 normal
+[OUT] [WORKER] 
+[WORKER]
+[OUT] [WORKER]    - Corner: 10
+[WORKER]    - Perpendicular: 0
+[OUT] [WORKER]    - Normal: 0
+[WORKER] 
+[WORKER] 
+[WORKER]
+[OUT] [WORKER]
+[OUT] [WORKER] 
+[WORKER]
+[OUT] [WORKER] [LIVE] Starting measurement loop (HEADLESS MODE, FULLSCREEN)...
+[WORKER] 
+[WORKER] ============================================================
+[WORKER] STEP 3: LIVE MEASUREMENT - ROBUST KEYPOINT TRACKING
+[OUT] [WORKER] ============================================================
+[WORKER] Keypoints will now adapt based on their type:
+[WORKER]   CORNER points: Enhanced detection (template + Shi-Tomasi + Harris)
+[OUT] [WORKER]   PERPENDICULAR points: Static after first successful match
+[WORKER]   NORMAL points: Basic feature matching
+[WORKER] PAUSE FUNCTION + MOUSE PAN/ZOOM!
+[WORKER] B KEY: Switch between FRONT and BACK sides!
+[OUT] [WORKER] 
+[WORKER] [HEADLESS] Starting live measurement automatically...
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:21] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:21] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] [PATH] Authoritative results path: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json
+[WORKER] [LIVE] Write path: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json | side=front
+[OUT] [WORKER]   pair_num=1 actual_cm=None spec_code=J1 source=never
+[WORKER]   pair_num=2 actual_cm=None spec_code=A1 source=never
+[WORKER]   pair_num=3 actual_cm=None spec_code=B1 source=never
+[WORKER]   pair_num=4 actual_cm=None spec_code=L1 source=never
+[WORKER]   pair_num=5 actual_cm=None spec_code=D2 source=never
+[OUT] [WORKER]   pair_num=6 actual_cm=None spec_code=F2 source=never
+[WORKER]   pair_num=7 actual_cm=None spec_code=G1 source=never
+[WORKER]   pair_num=8 actual_cm=None spec_code=H1 source=never
+[WORKER]   pair_num=9 actual_cm=None spec_code=E2 source=never
+[OUT] [WORKER]   pair_num=10 actual_cm=None spec_code=E3 source=never
+[WORKER]   pair_num=11 actual_cm=None spec_code=P2 source=never
+[OUT] [WORKER]   pair_num=12 actual_cm=None spec_code=P3 source=never
+[WORKER]   pair_num=13 actual_cm=None spec_code=O3 source=never
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:22] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:22] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:23] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:23] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:24] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:24] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:25] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:25] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:26] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:26] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:27] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:27] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [API] Garment color: black, color code: b
+[OUT] [API] Received 13 measurement specs from UI
+[API] Received request for KES_S
+[API] keypoints_pixels present: True
+[API] target_distances present: True
+[API] target_distances value: {"1":22,"2":43,"3":32,"4":44,"5":23}
+[API] image dimensions: 5456x2700
+[OUT] [API] image_data present: True, length: 1787655
+[API] Stopping existing measurement before starting new one...
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:27] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:28] "GET /api/measurement/status HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:28] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:28] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [CLEANUP] Removed stale live data: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json
+[OUT] [DB] Using measurement-ready keypoints_pixels for KES_S
+[OUT] [DB] Reference image actual size: 5456x2700
+[OUT] [DB] Target size (native camera): 5456x2700
+[DB] Image already at target resolution, no upscale needed
+[OUT] [DB] Wrote reference image to: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.jpg (1340724 bytes)
+[OUT] [DB] Image verification PASSED: 5456x2700
+[DB] Loaded 10 keypoints (pixels)
+[OUT] [DB] Loaded 5 target distances
+[DB] Placement box: [1298, 231, 3852, 2257]
+[OUT] [DB] Wrote annotation JSON to: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.json
+[CONFIG] Annotation JSON: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.json
+[OUT] [CONFIG] Reference Image: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.jpg
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:28] "POST /api/measurement/start HTTP/1.1" 200 -
+[OUT] [MEASUREMENT] Started worker with PID: 20976
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:29] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:29] "GET /api/measurement/status HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:29] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:29] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [WORKER] [START] Worker for article: KES, size: S (front)
+[WORKER] [PATH] Annotation JSON: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.json
+[OUT] [WORKER] [PATH] Reference Image: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.jpg
+[WORKER] [PATH] Results: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results
+[WORKER] [MODE] Garment Color: black
+[WORKER] [SPECS] Received 13 measurement specs from UI:
+[WORKER]   Pair 1 -> J1: Overarm crown to cuff (expected: 20 cm, db_id: 85)
+[OUT] [WORKER]   Pair 2 -> A1: Chest width 2.5cm below underarm (expected: 48 cm, db_id: 93)
+[WORKER]   Pair 3 -> B1: CB length excl neckband (expected: 62 cm, db_id: 94)
+[WORKER]   Pair 4 -> L1: Cuff width (expected: 17.5 cm, db_id: 95)
+[OUT] [WORKER]   Pair 5 -> D2: Hem width (expected: 48 cm, db_id: 96)
+[OUT] [WORKER]   Pair 6 -> F2: Back neck width seam to seam (expected: 18 cm, db_id: 97)
+[OUT] [WORKER]   Pair 7 -> G1: Shoulder Length (expected: 16.5 cm, db_id: 98)
+[WORKER]   Pair 8 -> H1: Bicep width - 2.5cm from armhole (expected: 19.25 cm, db_id: 99)
+[OUT] [WORKER]   Pair 9 -> E2: CB collar depth (expected: 7 cm, db_id: 100)
+[WORKER]   Pair 10 -> E3: Collar point depth (expected: 6 cm, db_id: 101)
+[OUT] [WORKER]   Pair 11 -> P2: Planket width (expected: 3 cm, db_id: 102)
+[WORKER]   Pair 12 -> P3: Planket length (expected: 12 cm, db_id: 103)
+[OUT] [WORKER]   Pair 13 -> O3: Half neck (expected: 22.25 cm, db_id: 104)
+[OUT] [WORKER] [CHECK] Reference image: 1340724 bytes, header(hex): ffd8ffe000104a464946000101000001
+[OUT] [WORKER] [CHECK] Valid JPEG header detected
+[OUT] [WORKER] [API] Garment color set to: black
+[WORKER] [LIVE] Will write live_measurements.json to: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json
+[OUT] [WORKER] Found 1 camera(s)
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:30] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:30] "GET /api/measurement/status HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:30] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:30] "GET /api/measurement/status HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:31] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:31] "GET /api/measurement/status HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:31] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:31] "GET /api/measurement/status HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:32] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:32] "GET /api/measurement/status HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:32] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:32] "GET /api/measurement/status HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:33] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:33] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [WORKER] support SSE4.1
+[OUT] [WORKER] 
+[WORKER] [ERR] No camera found - Could not initialize camera
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:33] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:33] "GET /api/measurement/status HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:34] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:01:34] "GET /api/measurement/status HTTP/1.1" 200 -
+[2026-02-26T07:02:00.892Z] Python server stopped
+
+============================================================
+[2026-02-26T07:02:05.810Z] Python server STARTING
+============================================================
+[OUT] [PATH] PROJECT_ROOT: C:\Program Files\MagicQC\resources
+[PATH] RESULTS_PATH (absolute): C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results
+[OUT] ============================================================
+[START] CAMERA MEASUREMENT API SERVER
+[OUT] ============================================================
+[DIR] Local Storage: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage
+[DIR] Laravel Storage: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage
+[PTS] Annotations: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\annotations
+[STAT] Results: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results
+============================================================
+[OUT] [OK] Annotations directory (Laravel): C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\annotations
+[OUT] [OK] Results directory: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results
+
+[OK] Server starting on http://127.0.0.1:5000
+[API] Laravel can now communicate with the measurement system
+[OUT] * Serving Flask app 'core_main'
+ * Debug mode: off
+[ERR] WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+[ERR] Press CTRL+C to quit
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:09] "GET /health HTTP/1.1" 200 -
+[OUT] [API] Garment color: black, color code: b
+[OUT] [API] Received 13 measurement specs from UI
+[API] Received request for KES_S
+[API] keypoints_pixels present: True
+[API] target_distances present: True
+[OUT] [API] target_distances value: {"1":22,"2":43,"3":32,"4":44,"5":23}
+[API] image dimensions: 5456x2700
+[API] image_data present: True, length: 1787655
+[OUT] [DB] Using measurement-ready keypoints_pixels for KES_S
+[OUT] [DB] Reference image actual size: 5456x2700
+[DB] Target size (native camera): 5456x2700
+[OUT] [DB] Image already at target resolution, no upscale needed
+[OUT] [DB] Wrote reference image to: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.jpg (1340724 bytes)
+[OUT] [DB] Image verification PASSED: 5456x2700
+[DB] Loaded 10 keypoints (pixels)
+[OUT] [DB] Loaded 5 target distances
+[DB] Placement box: [1298, 231, 3852, 2257]
+[OUT] [DB] Wrote annotation JSON to: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.json
+[CONFIG] Annotation JSON: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.json
+[CONFIG] Reference Image: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.jpg
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:30] "POST /api/measurement/start HTTP/1.1" 200 -
+[OUT] [MEASUREMENT] Started worker with PID: 2904
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:31] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:31] "GET /api/measurement/status HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:31] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:31] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [WORKER] [START] Worker for article: KES, size: S (front)
+[WORKER] [PATH] Annotation JSON: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.json
+[OUT] [WORKER] [PATH] Reference Image: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.jpg
+[WORKER] [PATH] Results: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results
+[WORKER] [MODE] Garment Color: black
+[WORKER] [SPECS] Received 13 measurement specs from UI:
+[WORKER]   Pair 1 -> J1: Overarm crown to cuff (expected: 20 cm, db_id: 85)
+[OUT] [WORKER]   Pair 2 -> A1: Chest width 2.5cm below underarm (expected: 48 cm, db_id: 93)
+[WORKER]   Pair 3 -> B1: CB length excl neckband (expected: 62 cm, db_id: 94)
+[WORKER]   Pair 4 -> L1: Cuff width (expected: 17.5 cm, db_id: 95)
+[OUT] [WORKER]   Pair 5 -> D2: Hem width (expected: 48 cm, db_id: 96)
+[WORKER]   Pair 6 -> F2: Back neck width seam to seam (expected: 18 cm, db_id: 97)
+[OUT] [WORKER]   Pair 7 -> G1: Shoulder Length (expected: 16.5 cm, db_id: 98)
+[WORKER]   Pair 8 -> H1: Bicep width - 2.5cm from armhole (expected: 19.25 cm, db_id: 99)
+[WORKER]   Pair 9 -> E2: CB collar depth (expected: 7 cm, db_id: 100)
+[OUT] [WORKER]   Pair 10 -> E3: Collar point depth (expected: 6 cm, db_id: 101)
+[WORKER]   Pair 11 -> P2: Planket width (expected: 3 cm, db_id: 102)
+[WORKER]   Pair 12 -> P3: Planket length (expected: 12 cm, db_id: 103)
+[OUT] [WORKER]   Pair 13 -> O3: Half neck (expected: 22.25 cm, db_id: 104)
+[OUT] [WORKER] [CHECK] Reference image: 1340724 bytes, header(hex): ffd8ffe000104a464946000101000001
+[OUT] [WORKER] [CHECK] Valid JPEG header detected
+[OUT] [WORKER] [API] Garment color set to: black
+[WORKER] [LIVE] Will write live_measurements.json to: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json
+[OUT] [WORKER] Found 1 camera(s)
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:32] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:32] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [WORKER] Camera opened successfully: Camera MV-SUA2000C#0001-0019
+[WORKER] 
+[WORKER] Camera initialized successfully
+[WORKER] [HEADLESS] Skipping interactive garment color prompt
+[OUT] [WORKER]
+[OUT] [WORKER] 
+[WORKER]
+[OUT] [WORKER] 
+[WORKER] [LOAD] Using annotation file: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.json
+[WORKER] [LOAD] Using reference image: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.jpg
+[WORKER] [FILE] Reference image size: 1340724 bytes
+[OUT] [WORKER] [COMPAT] Applied legacy type inference: 10 corner, 0 perp, 0 normal
+[OUT] [WORKER] 
+[WORKER] 
+[WORKER]    - Corner: 10
+[OUT] [WORKER]    - Perpendicular: 0
+[WORKER]    - Normal: 0
+[OUT] [WORKER] 
+[WORKER]
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:32] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:32] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [WORKER] 
+[WORKER]
+[OUT] [WORKER] 
+[WORKER]
+[OUT] [WORKER] [COMPAT] Applied legacy type inference (back): 10 corner, 0 perp, 0 normal
+[WORKER] 
+[WORKER]
+[OUT] [WORKER]    - Corner: 10
+[WORKER]    - Perpendicular: 0
+[OUT] [WORKER]    - Normal: 0
+[WORKER]
+[OUT] [WORKER] 
+[WORKER]
+[OUT] [WORKER]
+[OUT] [WORKER] 
+[WORKER]
+[OUT] [WORKER] [LIVE] Starting measurement loop (HEADLESS MODE, FULLSCREEN)...
+[WORKER] 
+[WORKER] ============================================================
+[WORKER] STEP 3: LIVE MEASUREMENT - ROBUST KEYPOINT TRACKING
+[OUT] [WORKER] ============================================================
+[WORKER] Keypoints will now adapt based on their type:
+[WORKER]   CORNER points: Enhanced detection (template + Shi-Tomasi + Harris)
+[OUT] [WORKER]   PERPENDICULAR points: Static after first successful match
+[WORKER]   NORMAL points: Basic feature matching
+[OUT] [WORKER] PAUSE FUNCTION + MOUSE PAN/ZOOM!
+[WORKER] B KEY: Switch between FRONT and BACK sides!
+[OUT] [WORKER] 
+[WORKER] [HEADLESS] Starting live measurement automatically...
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:33] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:33] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] [PATH] Authoritative results path: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json
+[WORKER] [LIVE] Write path: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json | side=front
+[OUT] [WORKER]   pair_num=1 actual_cm=None spec_code=J1 source=never
+[WORKER]   pair_num=2 actual_cm=None spec_code=A1 source=never
+[WORKER]   pair_num=3 actual_cm=None spec_code=B1 source=never
+[WORKER]   pair_num=4 actual_cm=None spec_code=L1 source=never
+[WORKER]   pair_num=5 actual_cm=None spec_code=D2 source=never
+[OUT] [WORKER]   pair_num=6 actual_cm=None spec_code=F2 source=never
+[WORKER]   pair_num=7 actual_cm=None spec_code=G1 source=never
+[OUT] [WORKER]   pair_num=8 actual_cm=None spec_code=H1 source=never
+[WORKER]   pair_num=9 actual_cm=None spec_code=E2 source=never
+[WORKER]   pair_num=10 actual_cm=None spec_code=E3 source=never
+[OUT] [WORKER]   pair_num=11 actual_cm=None spec_code=P2 source=never
+[WORKER]   pair_num=12 actual_cm=None spec_code=P3 source=never
+[OUT] [WORKER]   pair_num=13 actual_cm=None spec_code=O3 source=never
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:34] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:34] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:35] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:35] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:36] "GET /api/results/live HTTP/1.1" 200 -
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:36] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:37] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:37] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] Zoom: 1.0x
+[OUT] [WORKER] Zoom: 1.0x
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] Zoom: 1.0x
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] Zoom: 1.1x
+[OUT] [WORKER] Zoom: 1.2x
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:38] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:38] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:39] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:39] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[OUT] [WORKER] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:40] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:40] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [API] Garment color: black, color code: b
+[OUT] [API] Received 13 measurement specs from UI
+[API] Received request for KES_S
+[API] keypoints_pixels present: True
+[API] target_distances present: True
+[API] target_distances value: {"1":22,"2":43,"3":32,"4":44,"5":23}
+[API] image dimensions: 5456x2700
+[OUT] [API] image_data present: True, length: 1787655
+[API] Stopping existing measurement before starting new one...
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:40] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:40] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [CLEANUP] Removed stale live data: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json
+[OUT] [DB] Using measurement-ready keypoints_pixels for KES_S
+[OUT] [DB] Reference image actual size: 5456x2700
+[DB] Target size (native camera): 5456x2700
+[OUT] [DB] Image already at target resolution, no upscale needed
+[OUT] [DB] Wrote reference image to: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.jpg (1340724 bytes)
+[OUT] [DB] Image verification PASSED: 5456x2700
+[DB] Loaded 10 keypoints (pixels)
+[OUT] [DB] Loaded 5 target distances
+[DB] Placement box: [1298, 231, 3852, 2257]
+[OUT] [DB] Wrote annotation JSON to: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.json
+[CONFIG] Annotation JSON: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.json
+[OUT] [CONFIG] Reference Image: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.jpg
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:41] "POST /api/measurement/start HTTP/1.1" 200 -
+[OUT] [MEASUREMENT] Started worker with PID: 12140
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:41] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:41] "GET /api/measurement/status HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:42] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:42] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [WORKER] [START] Worker for article: KES, size: S (front)
+[WORKER] [PATH] Annotation JSON: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.json
+[OUT] [WORKER] [PATH] Reference Image: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.jpg
+[WORKER] [PATH] Results: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results
+[WORKER] [MODE] Garment Color: black
+[WORKER] [SPECS] Received 13 measurement specs from UI:
+[WORKER]   Pair 1 -> J1: Overarm crown to cuff (expected: 20 cm, db_id: 85)
+[OUT] [WORKER]   Pair 2 -> A1: Chest width 2.5cm below underarm (expected: 48 cm, db_id: 93)
+[WORKER]   Pair 3 -> B1: CB length excl neckband (expected: 62 cm, db_id: 94)
+[WORKER]   Pair 4 -> L1: Cuff width (expected: 17.5 cm, db_id: 95)
+[OUT] [WORKER]   Pair 5 -> D2: Hem width (expected: 48 cm, db_id: 96)
+[WORKER]   Pair 6 -> F2: Back neck width seam to seam (expected: 18 cm, db_id: 97)
+[OUT] [WORKER]   Pair 7 -> G1: Shoulder Length (expected: 16.5 cm, db_id: 98)
+[WORKER]   Pair 8 -> H1: Bicep width - 2.5cm from armhole (expected: 19.25 cm, db_id: 99)
+[OUT] [WORKER]   Pair 9 -> E2: CB collar depth (expected: 7 cm, db_id: 100)
+[WORKER]   Pair 10 -> E3: Collar point depth (expected: 6 cm, db_id: 101)
+[OUT] [WORKER]   Pair 11 -> P2: Planket width (expected: 3 cm, db_id: 102)
+[WORKER]   Pair 12 -> P3: Planket length (expected: 12 cm, db_id: 103)
+[OUT] [WORKER]   Pair 13 -> O3: Half neck (expected: 22.25 cm, db_id: 104)
+[OUT] [WORKER] [CHECK] Reference image: 1340724 bytes, header(hex): ffd8ffe000104a464946000101000001
+[OUT] [WORKER] [CHECK] Valid JPEG header detected
+[OUT] [WORKER] [API] Garment color set to: black
+[WORKER] [LIVE] Will write live_measurements.json to: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json
+[OUT] [WORKER] No camera found!
+[WORKER] [ERR] No camera found - Could not initialize camera
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:42] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:42] "GET /api/measurement/status HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:43] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:02:43] "GET /api/measurement/status HTTP/1.1" 200 -
+[2026-02-26T07:02:48.285Z] Python server stopped

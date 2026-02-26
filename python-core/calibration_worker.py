@@ -93,6 +93,8 @@ class CameraCalibrator:
             if self.hCamera > 0:
                 CameraUnInit(self.hCamera)
                 CameraAlignFree(self.pFrameBuffer)
+                self.hCamera = 0
+                self.pFrameBuffer = 0
 
         def grab(self):
             try:
@@ -277,6 +279,34 @@ class CameraCalibrator:
                 print(f"[WARN] Could not load calibration: {e}")
         return False
 
+    def _cv2_text_input(self, window_name, prompt, base_image):
+        """Get text input via cv2 window keyboard events (works with stdin=DEVNULL)."""
+        text_buffer = ""
+        while True:
+            display = base_image.copy()
+            h, w = display.shape[:2]
+            # Semi-transparent dark overlay
+            overlay = display.copy()
+            cv2.rectangle(overlay, (0, h // 2 - 100), (w, h // 2 + 100), (0, 0, 0), -1)
+            display = cv2.addWeighted(overlay, 0.8, display, 0.2, 0)
+            cv2.putText(display, prompt, (20, h // 2 - 40),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2)
+            cv2.putText(display, text_buffer + "_", (20, h // 2 + 20),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 2)
+            cv2.putText(display, "Enter = Confirm   |   Esc = Cancel   |   Backspace = Delete",
+                        (20, h // 2 + 70), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
+            cv2.imshow(window_name, display)
+            key = cv2.waitKey(0) & 0xFF
+            if key == 13:  # Enter
+                return text_buffer if text_buffer else None
+            elif key == 27:  # Escape
+                return None
+            elif key == 8:  # Backspace
+                text_buffer = text_buffer[:-1]
+            elif key == ord('.') or (ord('0') <= key <= ord('9')):
+                text_buffer += chr(key)
+        return None
+
     def show_calibration_instructions(self, image, window_name):
         """Display calibration instructions on image"""
         instructions = [
@@ -323,9 +353,9 @@ class CameraCalibrator:
             print("[ERR] Failed to initialize camera!")
             return False
 
-        # Show loading message
-        print("[OK] Camera ready. Preparing calibration window...")
-        input("Press Enter when ready to capture calibration frame...")
+        # Brief stabilization delay (replaces interactive input() which crashes with stdin=DEVNULL)
+        print("[OK] Camera ready. Auto-capturing calibration frame...")
+        time.sleep(0.5)
 
         # Capture calibration frame
         max_attempts = 5
@@ -445,7 +475,11 @@ class CameraCalibrator:
                     print("=" * 60)
 
                     try:
-                        distance_input = input("Distance in centimeters: ")
+                        # Use cv2-based input instead of stdin input() (stdin=DEVNULL in production)
+                        distance_input = self._cv2_text_input(window_name, "Distance in centimeters:", image_copy)
+                        if distance_input is None:
+                            print("[*] Distance input cancelled.")
+                            continue
                         self.reference_length_cm = float(distance_input)
 
                         if self.reference_length_cm <= 0:
@@ -538,7 +572,12 @@ def main(force_new=False, silent=False):
         if calibrator.load_calibration():
             print("\n[?] Existing calibration found.")
             print(f"    Scale: {calibrator.pixels_per_cm:.2f} pixels/cm")
-            response = input("Create new calibration? (y/n): ").strip().lower()
+            try:
+                response = input("Create new calibration? (y/n): ").strip().lower()
+            except EOFError:
+                # stdin is DEVNULL in production subprocess — default to keeping existing calibration
+                print("[*] No stdin available, keeping existing calibration.")
+                return 0
             if response != 'y':
                 print("[OK] Using existing calibration.")
                 return 0
@@ -548,8 +587,28 @@ def main(force_new=False, silent=False):
         if not silent:
             print("[*] Force new calibration mode - skipping prompt")
 
-    # Run calibration
-    if calibrator.run_calibration():
+    # Run calibration — wrapped in try/finally to guarantee camera release
+    try:
+        cal_result = calibrator.run_calibration()
+    except Exception as e:
+        print(f"\n[ERR] Calibration crashed: {e}")
+        import traceback
+        traceback.print_exc()
+        cal_result = False
+    finally:
+        # ALWAYS release camera, even on crash (prevents device lock)
+        if calibrator.camera_obj:
+            try:
+                calibrator.camera_obj.close()
+                print("[CLEANUP] Camera released in finally block")
+            except Exception as ce:
+                print(f"[CLEANUP] Camera release failed: {ce}")
+        try:
+            cv2.destroyAllWindows()
+        except Exception:
+            pass
+
+    if cal_result:
         print("\n[OK] Calibration completed successfully!")
         return 0
     else:

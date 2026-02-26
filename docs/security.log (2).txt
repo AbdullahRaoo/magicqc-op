@@ -1,0 +1,36 @@
+[2026-02-26T07:25:19.026Z] === Application startup ===
+[2026-02-26T07:25:19.031Z] PASS: Anti-debug check
+[2026-02-26T07:25:19.793Z] PASS: No debug tools detected
+[2026-02-26T07:25:19.984Z] PASS: No DLL injection detected
+[2026-02-26T07:25:20.042Z] PASS: VM detection check
+[2026-02-26T07:25:20.042Z] SKIP: Hardware license check disabled
+[2026-02-26T07:25:20.043Z] PASS: MagicCamera SDK found
+[2026-02-26T07:25:20.044Z] PASS: Core binary exists
+[2026-02-26T07:25:20.301Z] PASS: Binary integrity verified
+[2026-02-26T07:25:20.301Z] ALL 8 GATES PASSED — starting application
+[2026-02-26T07:25:20.319Z] CONFIG: .env loaded from encrypted vault
+[2026-02-26T07:25:20.319Z] CONFIG: 4 config files loaded securely
+[2026-02-26T07:27:14.849Z] === Application startup ===
+[2026-02-26T07:27:14.854Z] PASS: Anti-debug check
+[2026-02-26T07:27:15.645Z] PASS: No debug tools detected
+[2026-02-26T07:27:15.847Z] PASS: No DLL injection detected
+[2026-02-26T07:27:15.903Z] PASS: VM detection check
+[2026-02-26T07:27:15.904Z] SKIP: Hardware license check disabled
+[2026-02-26T07:27:15.905Z] PASS: MagicCamera SDK found
+[2026-02-26T07:27:15.906Z] PASS: Core binary exists
+[2026-02-26T07:27:16.075Z] PASS: Binary integrity verified
+[2026-02-26T07:27:16.076Z] ALL 8 GATES PASSED — starting application
+[2026-02-26T07:27:16.081Z] CONFIG: .env loaded from encrypted vault
+[2026-02-26T07:27:16.082Z] CONFIG: 4 config files loaded securely
+[2026-02-26T07:29:33.203Z] === Application startup ===
+[2026-02-26T07:29:33.207Z] PASS: Anti-debug check
+[2026-02-26T07:29:33.894Z] PASS: No debug tools detected
+[2026-02-26T07:29:34.092Z] PASS: No DLL injection detected
+[2026-02-26T07:29:34.151Z] PASS: VM detection check
+[2026-02-26T07:29:34.152Z] SKIP: Hardware license check disabled
+[2026-02-26T07:29:34.153Z] PASS: MagicCamera SDK found
+[2026-02-26T07:29:34.153Z] PASS: Core binary exists
+[2026-02-26T07:29:34.324Z] PASS: Binary integrity verified
+[2026-02-26T07:29:34.325Z] ALL 8 GATES PASSED — starting application
+[2026-02-26T07:29:34.330Z] CONFIG: .env loaded from encrypted vault
+[2026-02-26T07:29:34.331Z] CONFIG: 4 config files loaded securely

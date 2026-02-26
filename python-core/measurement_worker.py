@@ -48,6 +48,7 @@ def run_headless_measurement():
         print(f"[ERR] Config file {config_file} not found")
         sys.exit(1)
 
+    measurer = None  # Declare here so finally block can always access it
     try:
         with open(config_file, 'r') as f:
             config = json.load(f)
@@ -163,12 +164,29 @@ def run_headless_measurement():
         print(f"[LIVE] Starting measurement loop (HEADLESS MODE, FULLSCREEN)...")
         measurer.transfer_keypoints_to_live(headless=True)
 
+    except SystemExit:
+        raise  # Let sys.exit() propagate (exit codes 10/11/12)
     except Exception as e:
         print(f"[FATAL] Worker crash: {e}")
         import traceback
         traceback.print_exc()
         # No input() pause – there is no visible console in production
         sys.exit(1)
+    finally:
+        # ── CRITICAL: Always release camera hardware no matter how we exit ──
+        # Without this, a killed/crashed worker leaves the USB camera device
+        # locked and the next measurement attempt gets "no camera found".
+        if measurer and getattr(measurer, 'camera_obj', None):
+            try:
+                measurer.camera_obj.close()
+                print("[CLEANUP] Camera released successfully")
+            except Exception as e:
+                print(f"[CLEANUP] Camera release error (non-fatal): {e}")
+        try:
+            import cv2 as _cv2
+            _cv2.destroyAllWindows()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

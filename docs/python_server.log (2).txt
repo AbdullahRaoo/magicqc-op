@@ -1,0 +1,147 @@
+
+============================================================
+[2026-02-26T07:25:20.559Z] Python server STARTING
+============================================================
+[OUT] [PATH] PROJECT_ROOT: C:\Program Files\MagicQC\resources
+[PATH] RESULTS_PATH (absolute): C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results
+[OUT] ============================================================
+[OUT] [START] CAMERA MEASUREMENT API SERVER
+============================================================
+[DIR] Local Storage: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage
+[DIR] Laravel Storage: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage
+[PTS] Annotations: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\annotations
+[STAT] Results: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results
+[OUT] ============================================================
+[OUT] [OK] Annotations directory (Laravel): C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\annotations
+[OK] Results directory: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results
+[OUT] [OK] Server starting on http://127.0.0.1:5000
+[API] Laravel can now communicate with the measurement system
+[OUT] * Serving Flask app 'core_main'
+ * Debug mode: off
+[ERR] WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+[ERR] Press CTRL+C to quit
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:25:24] "GET /health HTTP/1.1" 200 -
+[2026-02-26T07:25:38.113Z] Python server stopped
+
+============================================================
+[2026-02-26T07:27:16.319Z] Python server STARTING
+============================================================
+[OUT] [PATH] PROJECT_ROOT: C:\Program Files\MagicQC\resources
+[PATH] RESULTS_PATH (absolute): C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results
+[OUT] ============================================================
+[START] CAMERA MEASUREMENT API SERVER
+============================================================
+[OUT] [DIR] Local Storage: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage
+[DIR] Laravel Storage: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage
+[PTS] Annotations: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\annotations
+[STAT] Results: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results
+============================================================
+[OUT] [OK] Annotations directory (Laravel): C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\annotations
+[OUT] [OK] Results directory: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results
+
+[OK] Server starting on http://127.0.0.1:5000
+[API] Laravel can now communicate with the measurement system
+[OUT] * Serving Flask app 'core_main'
+[OUT] * Debug mode: off
+[ERR] WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+[ERR] Press CTRL+C to quit
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:27:19] "GET /health HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:27:27] "GET /api/calibration/status HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:28:22] "GET /api/calibration/status HTTP/1.1" 200 -
+[OUT] [API] Garment color: black, color code: b
+[OUT] [API] Received 13 measurement specs from UI
+[API] Received request for KES_S
+[API] keypoints_pixels present: False
+[API] target_distances present: False
+[API] image dimensions: 5472x2752
+[OUT] [API] image_data present: False, length: 0
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:29:06] "POST /api/measurement/start HTTP/1.1
+[ERR] " 404 -
+[2026-02-26T07:29:28.281Z] Python server stopped
+
+============================================================
+[2026-02-26T07:29:34.567Z] Python server STARTING
+============================================================
+[OUT] [PATH] PROJECT_ROOT: C:\Program Files\MagicQC\resources
+[OUT] [PATH] RESULTS_PATH (absolute): C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results
+[OUT] ============================================================
+[START] CAMERA MEASUREMENT API SERVER
+============================================================
+[DIR] Local Storage: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage
+[DIR] Laravel Storage: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage
+[PTS] Annotations: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\annotations
+[STAT] Results: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results
+============================================================
+[OUT] [OK] Annotations directory (Laravel): C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\annotations
+[OK] Results directory: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results
+[OUT] [OK] Server starting on http://127.0.0.1:5000
+[API] Laravel can now communicate with the measurement system
+[OUT] * Serving Flask app 'core_main'
+ * Debug mode: off
+[ERR] WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+[ERR] Press CTRL+C to quit
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:29:38] "GET /health HTTP/1.1" 200 -
+[OUT] [API] Garment color: other, color code: z
+[API] Received 0 measurement specs from UI
+[OUT] [API] Received request for KES_S
+[API] keypoints_pixels present: False
+[API] target_distances present: False
+[API] image dimensions: 5472x2752
+[API] image_data present: False, length: 0
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:29:54] "POST /api/measurement/start HTTP/1.1" 404 -
+[OUT] [API] Garment color: black, color code: b
+[OUT] [API] Received 13 measurement specs from UI
+[API] Received request for KES_S
+[API] keypoints_pixels present: False
+[API] target_distances present: False
+[OUT] [API] image dimensions: 5472x2752
+[API] image_data present: False, length: 0
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:30:09] "POST /api/measurement/start HTTP/1.1" 404 -
+[OUT] [API] Garment color: black, color code: b
+[OUT] [API] Received 13 measurement specs from UI
+[API] Received request for KES_S
+[API] keypoints_pixels present: False
+[API] target_distances present: False
+[API] image dimensions: 5472x2752
+[OUT] [API] image_data present: False, length: 0
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:30:18] "POST /api/measurement/start HTTP/1.1
+[ERR] " 404 -
+[OUT] [API] Garment color: black, color code: b
+[OUT] [API] Received 13 measurement specs from UI
+[API] Received request for KES_S
+[API] keypoints_pixels present: False
+[API] target_distances present: False
+[API] image dimensions: 5472x2752
+[OUT] [API] image_data present: False, length: 0
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:30:27] "POST /api/measurement/start HTTP/1.1
+[ERR] " 404 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:30:47] "GET /api/calibration/status HTTP/1.1" 200 -
+[OUT] [API] Garment color: black, color code: b
+[OUT] [API] Received 13 measurement specs from UI
+[API] Received request for KES_S
+[API] keypoints_pixels present: False
+[API] target_distances present: False
+[API] image dimensions: 5472x2752
+[OUT] [API] image_data present: False, length: 0
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:31:30] "POST /api/measurement/start HTTP/1.1
+[ERR] " 404 -
+[OUT] [API] Garment color: black, color code: b
+[API] Received 13 measurement specs from UI
+[OUT] [API] Received request for KES_S
+[API] keypoints_pixels present: False
+[API] target_distances present: False
+[API] image dimensions: 5472x2752
+[API] image_data present: False, length: 0
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:31:51] "POST /api/measurement/start HTTP/1.1" 404 -
+[OUT] [API] Garment color: black, color code: b
+[API] Received 13 measurement specs from UI
+[OUT] [API] Received request for KES_S
+[API] keypoints_pixels present: False
+[API] target_distances present: False
+[API] image dimensions: 5472x2752
+[API] image_data present: False, length: 0
+[ERR] 127.0.0.1 - - [26/Feb/2026 12:31:52] "POST /api/measurement/start HTTP/1.1
+[ERR] " 404 -

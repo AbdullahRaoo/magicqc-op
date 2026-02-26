@@ -495,25 +495,25 @@ app.whenReady().then(async () => {
       }
       securityLog('PASS: VM detection check')
 
-      // ── Gate 5: Hardware License ──
-      console.log('🔒 Validating hardware license...')
-      const fingerprint = getFingerprint()
-
-      if (!licenseExists()) {
-        console.log('🔑 First launch detected — creating hardware license')
-        createLicense(fingerprint)
-        securityLog(`LICENSE CREATED: fingerprint=${fingerprint.substring(0, 16)}...`)
-        console.log('✅ License created and bound to this device')
-      }
-
-      const result = validateLicense(fingerprint)
-      if (!result.valid) {
-        securityLog(`BLOCKED: License validation failed — ${result.reason}`)
-        console.error(`🚫 License validation FAILED: ${result.reason}`)
-        createWindow({ fingerprint: result.fingerprint || fingerprint, reason: result.reason })
-        return
-      }
-      securityLog('PASS: Hardware license validated')
+      // ── Gate 5: Hardware License (DISABLED) ──
+      // Hardware-bound licensing temporarily disabled.
+      // To re-enable: uncomment the block below.
+      // console.log('🔒 Validating hardware license...')
+      // const fingerprint = getFingerprint()
+      // if (!licenseExists()) {
+      //   console.log('🔑 First launch detected — creating hardware license')
+      //   createLicense(fingerprint)
+      //   securityLog(`LICENSE CREATED: fingerprint=${fingerprint.substring(0, 16)}...`)
+      //   console.log('✅ License created and bound to this device')
+      // }
+      // const result = validateLicense(fingerprint)
+      // if (!result.valid) {
+      //   securityLog(`BLOCKED: License validation failed — ${result.reason}`)
+      //   console.error(`🚫 License validation FAILED: ${result.reason}`)
+      //   createWindow({ fingerprint: result.fingerprint || fingerprint, reason: result.reason })
+      //   return
+      // }
+      securityLog('SKIP: Hardware license check disabled')
 
       // ── Gate 6: Camera SDK (NON-BLOCKING) ──
       // SDK is only needed for live camera measurement, not for app launch.

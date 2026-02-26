@@ -17,11 +17,23 @@ from logging.handlers import RotatingFileHandler
 
 # ---------------------------------------------------------------------------
 # Log directory lives at the PROJECT ROOT (parent of python-core/)
-# Frozen (PyInstaller): sys.executable is the .exe sitting in PROJECT_ROOT
-# Dev:                   this file is at PROJECT_ROOT/python-core/worker_logger.py
+# Frozen (PyInstaller): sys.executable is the .exe at
+#   C:\Program Files\MagicQC\resources\python-core\dist\magicqc_core.exe
+#   → PROJECT_ROOT should be 3 levels up (resources\python-core\dist → resources)
+#   BUT this path is read-only under Program Files, so we ALWAYS prefer
+#   MAGICQC_STORAGE_ROOT env var (set by Electron main.ts).
+# Dev: this file is at PROJECT_ROOT/python-core/worker_logger.py
 # ---------------------------------------------------------------------------
 if getattr(sys, 'frozen', False):
-    PROJECT_ROOT = os.path.dirname(sys.executable)
+    _exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+    # Navigate up from python-core/dist/ to the app root
+    _parent = os.path.dirname(_exe_dir)
+    if os.path.basename(_parent).lower() == 'python-core':
+        PROJECT_ROOT = os.path.dirname(_parent)
+    elif os.path.basename(_exe_dir).lower() == 'dist':
+        PROJECT_ROOT = os.path.dirname(os.path.dirname(_exe_dir))
+    else:
+        PROJECT_ROOT = _exe_dir
 else:
     _CORE_DIR = os.path.dirname(os.path.abspath(__file__))
     PROJECT_ROOT = os.path.dirname(_CORE_DIR)

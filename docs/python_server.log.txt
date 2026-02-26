@@ -1,0 +1,82 @@
+
+============================================================
+[2026-02-26T06:39:59.097Z] Python server STARTING
+============================================================
+[OUT] [PATH] PROJECT_ROOT: C:\Program Files\MagicQC\resources
+[PATH] RESULTS_PATH (absolute): C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results
+[OUT] ============================================================
+[START] CAMERA MEASUREMENT API SERVER
+[OUT] ============================================================
+[DIR] Local Storage: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage
+[DIR] Laravel Storage: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage
+[PTS] Annotations: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\annotations
+[STAT] Results: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results
+============================================================
+[OUT] [OK] Annotations directory (Laravel): C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\annotations
+[OK] Results directory: C:\Users\Eagle\AppData\Roaming\operatorpannel\storage\measurement_results
+[OUT] [OK] Server starting on http://127.0.0.1:5000
+[API] Laravel can now communicate with the measurement system
+[OUT] * Serving Flask app 'core_main'
+[OUT] * Debug mode: off
+[ERR] WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+[ERR] Press CTRL+C to quit
+[ERR] 127.0.0.1 - - [26/Feb/2026 11:40:02] "GET /health HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 11:40:03] "GET /api/calibration/status HTTP/1.1" 200 -
+[OUT] [API] Garment color: black, color code: b
+[OUT] [API] Received 13 measurement specs from UI
+[API] Received request for KES_S
+[API] keypoints_pixels present: True
+[API] target_distances present: True
+[API] target_distances value: {"1":22,"2":43,"3":32,"4":44,"5":23}
+[API] image dimensions: 5456x2700
+[OUT] [API] image_data present: True, length: 1787655
+[DB] Using measurement-ready keypoints_pixels for KES_S
+[OUT] [DB] Reference image actual size: 5456x2700
+[DB] Target size (native camera): 5456x2700
+[DB] Image already at target resolution, no upscale needed
+[OUT] [DB] Wrote reference image to: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.jpg (1340724 bytes)
+[OUT] [DB] Image verification PASSED: 5456x2700
+[DB] Loaded 10 keypoints (pixels)
+[OUT] [DB] Loaded 5 target distances
+[DB] Placement box: [1298, 231, 3852, 2257]
+[OUT] [DB] Wrote annotation JSON to: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.json
+[OUT] [CONFIG] Annotation JSON: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.json
+[CONFIG] Reference Image: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.jpg
+[ERR] 127.0.0.1 - - [26/Feb/2026 11:40:25] "POST /api/measurement/start HTTP/1.1" 200 -
+[OUT] [MEASUREMENT] Started worker with PID: 19484
+[ERR] 127.0.0.1 - - [26/Feb/2026 11:40:25] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 11:40:25] "GET /api/measurement/status HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 11:40:26] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 11:40:26] "GET /api/measurement/status HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 11:40:26] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 11:40:26] "GET /api/measurement/status HTTP/1.1" 200 -
+[OUT] [API] Garment color: black, color code: b
+[API] Received 13 measurement specs from UI
+[OUT] [API] Received request for KES_S
+[API] keypoints_pixels present: True
+[API] target_distances present: True
+[API] target_distances value: {"1":22,"2":43,"3":32,"4":44,"5":23}
+[API] image dimensions: 5456x2700
+[OUT] [API] image_data present: True, length: 1787655
+[OUT] [DB] Using measurement-ready keypoints_pixels for KES_S
+[OUT] [DB] Reference image actual size: 5456x2700
+[DB] Target size (native camera): 5456x2700
+[DB] Image already at target resolution, no upscale needed
+[OUT] 
+[OUT] [DB] Wrote reference image to: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.jpg (1340724 bytes)
+[OUT] [DB] Image verification PASSED: 5456x2700
+[OUT] [DB] Loaded 10 keypoints (pixels)
+[DB] Loaded 5 target distances
+[DB] Placement box: [1298, 231, 3852, 2257]
+[OUT] [DB] Wrote annotation JSON to: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.json
+[CONFIG] Annotation JSON: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.json
+[OUT] [CONFIG] Reference Image: C:\Users\Eagle\AppData\Roaming\operatorpannel\temp_annotations\KES_S-b.jpg
+[ERR] 127.0.0.1 - - [26/Feb/2026 11:40:28] "POST /api/measurement/start HTTP/1.1" 200 -
+[OUT] [MEASUREMENT] Started worker with PID: 6052
+[ERR] 127.0.0.1 - - [26/Feb/2026 11:40:28] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 11:40:28] "GET /api/measurement/status HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 11:40:29] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 11:40:29] "GET /api/measurement/status HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 11:40:29] "GET /api/results/live HTTP/1.1" 200 -
+[ERR] 127.0.0.1 - - [26/Feb/2026 11:40:29] "GET /api/measurement/status HTTP/1.1" 200 -

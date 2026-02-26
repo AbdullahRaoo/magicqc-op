@@ -1,0 +1,12 @@
+[2026-02-26T06:39:57.715Z] === Application startup ===
+[2026-02-26T06:39:57.720Z] PASS: Anti-debug check
+[2026-02-26T06:39:58.406Z] PASS: No debug tools detected
+[2026-02-26T06:39:58.595Z] PASS: No DLL injection detected
+[2026-02-26T06:39:58.652Z] PASS: VM detection check
+[2026-02-26T06:39:58.653Z] SKIP: Hardware license check disabled
+[2026-02-26T06:39:58.654Z] PASS: MagicCamera SDK found
+[2026-02-26T06:39:58.654Z] PASS: Core binary exists
+[2026-02-26T06:39:58.829Z] PASS: Binary integrity verified
+[2026-02-26T06:39:58.830Z] ALL 8 GATES PASSED — starting application
+[2026-02-26T06:39:58.860Z] CONFIG: .env loaded from encrypted vault
+[2026-02-26T06:39:58.861Z] CONFIG: 4 config files loaded securely

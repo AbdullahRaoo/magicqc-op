@@ -130,6 +130,50 @@ def run_api_server():
             'stderr': subprocess.DEVNULL,
         }
 
+    # ── Helper: gracefully stop a worker process ──
+    def _graceful_stop_worker(proc, label='worker', timeout_s=3.0):
+        """Terminate a worker process, giving it time to release hardware (camera).
+        Falls back to kill() if the process doesn't exit within timeout_s seconds.
+        """
+        if proc is None:
+            return
+        try:
+            pid = proc.pid
+            parent = psutil.Process(pid)
+            children = parent.children(recursive=True)
+
+            # Step 1: SIGTERM (terminate) — allows finally blocks to run
+            for child in children:
+                try:
+                    child.terminate()
+                except Exception:
+                    pass
+            parent.terminate()
+            print(f"[STOP] Sent terminate to {label} PID {pid}")
+
+            # Step 2: Wait for graceful exit (camera cleanup happens here)
+            gone, alive = psutil.wait_procs([parent] + children, timeout=timeout_s)
+            if alive:
+                # Step 3: Force-kill anything still running
+                for p in alive:
+                    try:
+                        p.kill()
+                    except Exception:
+                        pass
+                print(f"[STOP] Force-killed {len(alive)} stubborn process(es)")
+            else:
+                print(f"[STOP] {label} exited gracefully")
+
+        except psutil.NoSuchProcess:
+            print(f"[STOP] {label} already exited")
+        except Exception as e:
+            print(f"[WARN] Error stopping {label}: {e}")
+            # Last resort: try raw kill
+            try:
+                proc.kill()
+            except Exception:
+                pass
+
     app = Flask(__name__)
     CORS(app)  # Enable CORS for Laravel communication
 
@@ -429,16 +473,9 @@ def run_api_server():
             # Stop any existing measurement before starting a new one
             if measurement_status['running']:
                 print(f"[API] Stopping existing measurement before starting new one...")
-                if measurement_process:
-                    try:
-                        parent = psutil.Process(measurement_process.pid)
-                        for child in parent.children(recursive=True):
-                            child.kill()
-                        parent.kill()
-                    except Exception as e:
-                        print(f"[WARN] Error stopping existing process: {e}")
+                _graceful_stop_worker(measurement_process, 'existing-measurement')
+                measurement_process = None
                 measurement_status['running'] = False
-                time.sleep(0.5)
 
             # Clean stale live_measurements.json to prevent cached data leaking
             for stale_path in [
@@ -858,9 +895,17 @@ def run_api_server():
                     }, f)
 
             if not annotation_json_path:
+                print(f"[ERR] All annotation lookup tiers exhausted for {article_style}_{annotation_name} ({side})")
+                print(f"[ERR]   keypoints_pixels provided: {keypoints_pixels is not None}")
+                print(f"[ERR]   image_data provided: {image_data is not None}")
+                print(f"[ERR]   Searched dirs: {ANNOTATIONS_PATH}, {LOCAL_ANNOTATIONS_PATH}")
                 return jsonify({
                     'status': 'error',
-                    'message': f'Annotation not found. No database data provided and no file found for: {article_style}_{annotation_name}'
+                    'message': (
+                        f'Annotation not found for "{article_style} / {annotation_name} / {side}". '
+                        f'No annotation data was received from the server and no local file exists. '
+                        f'Please upload an annotation for this article, size, and side, or check your network connection.'
+                    )
                 }), 404
 
             # Create config file for measurement script
@@ -995,13 +1040,8 @@ def run_api_server():
                 }), 400
 
             if measurement_process:
-                try:
-                    parent = psutil.Process(measurement_process.pid)
-                    for child in parent.children(recursive=True):
-                        child.kill()
-                    parent.kill()
-                except Exception:
-                    pass
+                _graceful_stop_worker(measurement_process, 'measurement')
+                measurement_process = None
 
             measurement_status.update({
                 'running': False,
@@ -1473,6 +1513,16 @@ def run_api_server():
 
     # â”€â”€ Start server â”€â”€
     API_PORT = int(os.environ.get('PYTHON_API_PORT', '5000'))
+
+    # ── Ensure worker cleanup on server exit ──
+    import atexit
+    def _cleanup_on_exit():
+        nonlocal measurement_process
+        if measurement_process:
+            print("[SHUTDOWN] Cleaning up measurement worker before exit...")
+            _graceful_stop_worker(measurement_process, 'shutdown-cleanup', timeout_s=2.0)
+            measurement_process = None
+    atexit.register(_cleanup_on_exit)
 
     print("=" * 60)
     print("[START] CAMERA MEASUREMENT API SERVER")
