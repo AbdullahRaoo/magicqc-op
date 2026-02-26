@@ -805,15 +805,19 @@ def run_api_server():
                         if os.path.exists(json_file):
                             annotation_json_path = json_file
 
-                            for ext in ['.jpg', '.jpeg', '.png', '.bmp']:
-                                potential_image = os.path.join(search_dir, f"{base_name_with_side}{ext}")
-                                if os.path.exists(potential_image):
-                                    reference_image_path = potential_image
+                            # Try side-specific image first, then generic image as fallback
+                            for name_pattern in [base_name_with_side, base_name_generic]:
+                                for ext in ['.jpg', '.jpeg', '.png', '.bmp']:
+                                    potential_image = os.path.join(search_dir, f"{name_pattern}{ext}")
+                                    if os.path.exists(potential_image):
+                                        reference_image_path = potential_image
+                                        break
+                                if reference_image_path:
                                     break
 
                             print(f"[ANNOTATION] Found side-specific annotation ({side}): {json_file}")
                             if reference_image_path:
-                                print(f"[ANNOTATION] Found side-specific reference image: {reference_image_path}")
+                                print(f"[ANNOTATION] Found reference image: {reference_image_path}")
                             break
 
                     if not annotation_json_path:

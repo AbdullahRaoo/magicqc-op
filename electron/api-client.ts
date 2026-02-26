@@ -221,33 +221,61 @@ class MagicQCApiClient {
             headers['Content-Type'] = 'application/json'
         }
 
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 30000) // 30s timeout for REST (annotation payloads can be large)
+        const MAX_RETRIES = 2
+        const RETRY_DELAYS = [2000, 4000]
+        let lastError: Error | null = null
 
-        try {
-            const response = await fetch(url, {
-                ...options,
-                headers: {
-                    ...headers,
-                    ...(options.headers as Record<string, string> || {}),
-                },
-                signal: controller.signal,
-            })
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            const controller = new AbortController()
+            const timeout = setTimeout(() => controller.abort(), 30000) // 30s timeout for REST (annotation payloads can be large)
 
-            if (!response.ok) {
-                const error = await response.json().catch(() => ({ message: response.statusText }))
-                throw new Error(error.message || `HTTP ${response.status}`)
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    headers: {
+                        ...headers,
+                        ...(options.headers as Record<string, string> || {}),
+                    },
+                    signal: controller.signal,
+                })
+
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({ message: response.statusText }))
+                    throw new Error(error.message || `HTTP ${response.status}`)
+                }
+
+                return response.json()
+            } catch (error: any) {
+                clearTimeout(timeout)
+                lastError = error
+
+                // Network/socket errors — retry with backoff
+                const isNetworkError =
+                    error.name === 'AbortError' ||
+                    error.message?.includes('ECONNREFUSED') ||
+                    error.message?.includes('ETIMEDOUT') ||
+                    error.message?.includes('fetch failed') ||
+                    error.message?.includes('terminated') ||
+                    error.message?.includes('other side closed') ||
+                    error.message?.includes('network')
+
+                if (isNetworkError && attempt < MAX_RETRIES) {
+                    const delay = RETRY_DELAYS[attempt] || 4000
+                    console.log(`[REST] ⚠️ Network error (attempt ${attempt + 1}/${MAX_RETRIES + 1}): ${error.message}. Retrying in ${delay / 1000}s...`)
+                    await new Promise(resolve => setTimeout(resolve, delay))
+                    continue
+                }
+
+                if (error.name === 'AbortError') {
+                    throw new Error(`REST request timed out (30s): ${endpoint}`)
+                }
+                throw error
+            } finally {
+                clearTimeout(timeout)
             }
-
-            return response.json()
-        } catch (error: any) {
-            if (error.name === 'AbortError') {
-                throw new Error(`REST request timed out (30s): ${endpoint}`)
-            }
-            throw error
-        } finally {
-            clearTimeout(timeout)
         }
+
+        throw lastError || new Error('All REST retry attempts failed')
     }
 
     // ──── Connection (REST — stays as REST per guide §9) ─────────────────────
@@ -433,57 +461,70 @@ class MagicQCApiClient {
 
     // ──── Measurement Specs (GraphQL) ────────────────────────────────────────
 
-    async getMeasurementSpecs(articleId: number, size: string): Promise<MeasurementSpec[]> {
-        // Try fetching with unit field first; if schema doesn't have it, retry without
-        let data: any = null
-        let hasUnitField = true
+    /** Cached: does the GraphQL schema have `unit` on measurements/sizes? null = unknown */
+    private _schemaHasUnit: boolean | null = null
 
-        try {
+    async getMeasurementSpecs(articleId: number, size: string): Promise<MeasurementSpec[]> {
+        let data: any = null
+
+        // If we already know unit is unsupported, skip the failing query
+        if (this._schemaHasUnit === false) {
             const result = await this.query<{
                 measurements: Array<{
                     id: string; code: string; measurement: string
-                    tol_plus: number; tol_minus: number; side?: string; unit?: string
-                    sizes: Array<{ size: string; value: number; unit?: string }>
+                    tol_plus: number; tol_minus: number; side?: string
+                    sizes: Array<{ size: string; value: number }>
                 }>
             }>(`{
                 measurements(article_id: ${articleId}) {
-                    id code measurement tol_plus tol_minus side unit
-                    sizes { size value unit }
+                    id code measurement tol_plus tol_minus side
+                    sizes { size value }
                 }
             }`)
             data = result.data
-        } catch (err: any) {
-            // If GraphQL rejects 'unit' field, retry without it
-            if (err?.message?.includes('unit')) {
-                console.log('[SPECS] "unit" field not in GraphQL schema — retrying without it')
-                hasUnitField = false
+        } else {
+            try {
                 const result = await this.query<{
                     measurements: Array<{
                         id: string; code: string; measurement: string
-                        tol_plus: number; tol_minus: number; side?: string
-                        sizes: Array<{ size: string; value: number }>
+                        tol_plus: number; tol_minus: number; side?: string; unit?: string
+                        sizes: Array<{ size: string; value: number; unit?: string }>
                     }>
                 }>(`{
                     measurements(article_id: ${articleId}) {
-                        id code measurement tol_plus tol_minus side
-                        sizes { size value }
+                        id code measurement tol_plus tol_minus side unit
+                        sizes { size value unit }
                     }
                 }`)
                 data = result.data
-            } else {
-                throw err
+                this._schemaHasUnit = true
+            } catch (err: any) {
+                // If GraphQL rejects 'unit' field, remember and retry without it
+                if (err?.message?.includes('unit')) {
+                    if (this._schemaHasUnit === null) {
+                        console.log('[SPECS] "unit" field not in GraphQL schema — will omit from future queries')
+                    }
+                    this._schemaHasUnit = false
+                    const result = await this.query<{
+                        measurements: Array<{
+                            id: string; code: string; measurement: string
+                            tol_plus: number; tol_minus: number; side?: string
+                            sizes: Array<{ size: string; value: number }>
+                        }>
+                    }>(`{
+                        measurements(article_id: ${articleId}) {
+                            id code measurement tol_plus tol_minus side
+                            sizes { size value }
+                        }
+                    }`)
+                    data = result.data
+                } else {
+                    throw err
+                }
             }
         }
 
-        console.log(`[SPECS] getMeasurementSpecs(article=${articleId}, size=${size}) → ${(data?.measurements || []).length} measurements, unitField=${hasUnitField}`)
-        if (data?.measurements?.[0]) {
-            console.log('[SPECS] Sample measurement keys:', Object.keys(data.measurements[0]).join(', '))
-            console.log('[SPECS] Sample measurement unit:', (data.measurements[0] as any).unit ?? '(not present)')
-            if (data.measurements[0].sizes?.[0]) {
-                console.log('[SPECS] Sample size keys:', Object.keys(data.measurements[0].sizes[0]).join(', '))
-                console.log('[SPECS] Sample size unit:', (data.measurements[0].sizes[0] as any).unit ?? '(not present)')
-            }
-        }
+        console.log(`[SPECS] getMeasurementSpecs(article=${articleId}, size=${size}) → ${(data?.measurements || []).length} measurements`)
 
         // Filter sizes to the requested size and flatten into spec format
         return (data?.measurements || []).map((m: any) => {
@@ -536,9 +577,15 @@ class MagicQCApiClient {
 
     // ──── Measurement Results — Load (GraphQL) ─────────────────────────────────
 
+    /** Cached: once we know measurementResults doesn't exist, stop hitting the server */
+    private _measurementResultsAvailable: boolean | null = null
+
     async getMeasurementResults(poArticleId: number, size: string): Promise<MeasurementResult[]> {
-        // Note: measurementResults query may not exist on all server versions.
-        // Gracefully return empty if the query fails.
+        // If we already know this query doesn't exist on the server, skip entirely
+        if (this._measurementResultsAvailable === false) {
+            return []
+        }
+
         try {
             const { data } = await this.query<{
                 measurementResults: Array<{
@@ -555,6 +602,7 @@ class MagicQCApiClient {
                 }
             }`)
 
+            this._measurementResultsAvailable = true
             return (data?.measurementResults || []).map(r => ({
                 id: parseInt(r.id),
                 purchase_order_article_id: parseInt(r.purchase_order_article_id),
@@ -568,8 +616,16 @@ class MagicQCApiClient {
                 status: r.status,
                 operator_id: r.operator_id ? parseInt(r.operator_id) : null,
             }))
-        } catch (error) {
-            console.warn('[API] measurementResults query failed (may not exist on server), returning empty:', error)
+        } catch (error: any) {
+            // Schema error = query doesn't exist on this server version — cache and stop trying
+            if (error?.message?.includes('GraphQL Error')) {
+                if (this._measurementResultsAvailable === null) {
+                    console.log('[API] measurementResults query not available on server — skipping future calls')
+                }
+                this._measurementResultsAvailable = false
+            } else {
+                console.warn('[API] measurementResults query failed:', error?.message || error)
+            }
             return []
         }
     }

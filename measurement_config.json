@@ -1,8 +1,8 @@
 {
-    "annotation_name": "S",
-    "article_style": "KES",
-    "annotation_json_path": "D:\\work\\react\\operatorPannel-main\\temp_annotations\\KES_S-b.json",
-    "reference_image_path": "D:\\work\\react\\operatorPannel-main\\temp_annotations\\KES_S-b.jpg",
+    "annotation_name": "11-12 Years",
+    "article_style": "Sweat Shirt",
+    "annotation_json_path": "D:\\work\\react\\operatorPannel-main\\temp_annotations\\Sweat Shirt_11-12 Years_front.json",
+    "reference_image_path": "D:\\work\\react\\operatorPannel-main\\temp_annotations\\Sweat Shirt_11-12 Years.jpg",
     "side": "front",
     "garment_color": "black",
     "laravel_storage": "D:\\work\\react\\operatorPannel-main\\storage",
@@ -10,94 +10,52 @@
     "measurement_specs": [
         {
             "index": 0,
-            "db_id": 85,
-            "code": "J1",
-            "name": "Overarm crown to cuff",
-            "expected_value": 20
+            "db_id": 60,
+            "code": "A",
+            "name": "Left Shoulder",
+            "expected_value": 50
         },
         {
             "index": 1,
-            "db_id": 93,
-            "code": "A1",
-            "name": "Chest width 2.5cm below underarm",
-            "expected_value": 48
+            "db_id": 61,
+            "code": "B",
+            "name": "Right Shoulder",
+            "expected_value": 50
         },
         {
             "index": 2,
-            "db_id": 94,
-            "code": "B1",
-            "name": "CB length excl neckband",
-            "expected_value": 62
+            "db_id": 62,
+            "code": "C",
+            "name": "Hem Width",
+            "expected_value": 40.3
         },
         {
             "index": 3,
-            "db_id": 95,
-            "code": "L1",
-            "name": "Cuff width",
-            "expected_value": 17.5
+            "db_id": 63,
+            "code": "D",
+            "name": "Length",
+            "expected_value": 60
         },
         {
             "index": 4,
-            "db_id": 96,
-            "code": "D2",
-            "name": "Hem width",
-            "expected_value": 48
+            "db_id": 64,
+            "code": "E",
+            "name": "Cuff Length",
+            "expected_value": 8
         },
         {
             "index": 5,
-            "db_id": 97,
-            "code": "F2",
-            "name": "Back neck width seam to seam",
-            "expected_value": 18
+            "db_id": 66,
+            "code": "G",
+            "name": "Waist width",
+            "expected_value": 43
         },
         {
             "index": 6,
-            "db_id": 98,
-            "code": "G1",
-            "name": "Shoulder Length",
-            "expected_value": 16.5
-        },
-        {
-            "index": 7,
-            "db_id": 99,
-            "code": "H1",
-            "name": "Bicep width - 2.5cm from armhole",
-            "expected_value": 19.25
-        },
-        {
-            "index": 8,
-            "db_id": 100,
-            "code": "E2",
-            "name": "CB collar depth",
-            "expected_value": 7
-        },
-        {
-            "index": 9,
-            "db_id": 101,
-            "code": "E3",
-            "name": "Collar point depth",
-            "expected_value": 6
-        },
-        {
-            "index": 10,
-            "db_id": 102,
-            "code": "P2",
-            "name": "Planket width",
-            "expected_value": 3
-        },
-        {
-            "index": 11,
-            "db_id": 103,
-            "code": "P3",
-            "name": "Planket length",
-            "expected_value": 12
-        },
-        {
-            "index": 12,
-            "db_id": 104,
-            "code": "O3",
-            "name": "Half neck",
-            "expected_value": 22.25
+            "db_id": 67,
+            "code": "H",
+            "name": "Chest Width",
+            "expected_value": 53.5
         }
     ]
 }

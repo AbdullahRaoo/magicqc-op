@@ -842,23 +842,11 @@ export function ArticlesList() {
         let dbAnnotation: AnnotationRow | null = null
 
         // Use the operatorFetch API which handles all color-aware tiers server-side
-        // Retry up to 3 times with 1.5s delay — handles Laravel server slow-start or transient failures
-        let fetchResult: any = { success: false }
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          console.log(`[FETCH] Attempt ${attempt}/3: operatorFetch style='${articleStyle}', size='${selectedSize}', side='${side}', color='${colorCode}'`)
-          fetchResult = await window.api.operatorFetch(articleStyle, selectedSize, side, colorCode)
-          if (fetchResult.success && fetchResult.annotation) {
-            console.log(`[FETCH] Attempt ${attempt} succeeded`)
-            break
-          }
-          console.log(`[FETCH] Attempt ${attempt} failed: success=${fetchResult.success}, hasAnnotation=${!!fetchResult.annotation}, error=${fetchResult.error || 'none'}`)
-          if (attempt < 3) {
-            console.log(`[FETCH] Retrying in 1.5s...`)
-            await new Promise(r => setTimeout(r, 1500))
-          }
-        }
+        // restRequest already has built-in retry (2 retries with backoff) for network errors
+        console.log(`[FETCH] operatorFetch: style='${articleStyle}', size='${selectedSize}', side='${side}', color='${colorCode}'`)
+        const fetchResult = await window.api.operatorFetch(articleStyle, selectedSize, side, colorCode)
 
-        console.log(`[FETCH] Final result: success=${fetchResult.success}, hasAnnotation=${!!fetchResult.annotation}, error=${fetchResult.error || 'none'}`)
+        console.log(`[FETCH] Result: success=${fetchResult.success}, hasAnnotation=${!!fetchResult.annotation}, error=${fetchResult.error || 'none'}`)
 
         if (fetchResult.success && fetchResult.annotation) {
           const ann = fetchResult.annotation
@@ -987,21 +975,11 @@ export function ArticlesList() {
         useLocalFiles = true
       }
 
-      // ============== Pre-flight check ==============
-      // If API returned nothing and we have zero annotation data, abort early with a clear message
-      // instead of sending an empty request to Python which will 404.
-      if (useLocalFiles && keypointsPixels.length === 0 && !imageData) {
-        console.error('[MEASUREMENT] No annotation data from API after 3 retries, and no local fallback data.')
-        const artLabel = articleStyle || '?'
-        setError(
-          `No annotation found for "${artLabel} / ${selectedSize} / ${side}". ` +
-          `Please upload an annotation for this article, size, and side first, or check your network connection and try again.`
-        )
-        setIsShiftLocked(false)
-        return
-      }
-
       // ============== Start measurement ==============
+      // Note: Even if no DB annotation was found (useLocalFiles=true), the Python API has a
+      // multi-tier file fallback (Priority 3) that searches local annotation files in temp_annotations/
+      // and storage/annotations/. So we always send the request — Python will 404 only if ALL 
+      // lookups (DB + file) fail, with a clear error message.
       console.log('[MEASUREMENT] Starting camera with:')
       console.log('  - Keypoints:', keypointsPixels.length)
       console.log('  - Target distances:', Object.keys(targetDistances).length)

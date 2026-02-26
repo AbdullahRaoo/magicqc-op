@@ -831,8 +831,14 @@ function setupApiHandlers() {
       }
       return result
     } catch (error) {
-      console.error('API operatorFetch error:', error)
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+      const msg = error instanceof Error ? error.message : 'Unknown error'
+      // "No annotation found" is expected for articles not yet uploaded — don't log scary stack traces
+      if (msg.includes('No annotation found') || msg.includes('Not Found') || msg.includes('404')) {
+        console.log(`[operatorFetch] Not in database: ${articleStyle}/${size}/${side || 'front'} — will use local files if available`)
+      } else {
+        console.error('API operatorFetch error:', error)
+      }
+      return { success: false, error: msg }
     }
   })
 
