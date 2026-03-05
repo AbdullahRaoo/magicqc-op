@@ -3,7 +3,7 @@
     "article_style": "12-C759",
     "annotation_json_path": "D:\\work\\react\\operatorPannel-main\\temp_annotations\\12-C759_XS-z.json",
     "reference_image_path": "D:\\work\\react\\operatorPannel-main\\temp_annotations\\12-C759_XS-z.jpg",
-    "side": "front",
+    "side": "back",
     "garment_color": "other",
     "laravel_storage": "D:\\work\\react\\operatorPannel-main\\storage",
     "results_path": "D:\\work\\react\\operatorPannel-main\\storage\\measurement_results",

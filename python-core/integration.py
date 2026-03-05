@@ -3061,9 +3061,21 @@ class LiveKeypointDistanceMeasurer:
             
             cv2.imshow(window_name, display_frame)
             
-            # Check external stop flag (for headless mode)
-            if headless and getattr(self, 'should_stop', False):
-                print("[HEADLESS] Stop signal received, exiting measurement loop")
+            # ── Detect window closed by user (ALT+F4, X button, taskbar close) ──
+            # cv2.imshow() silently RECREATES a destroyed window, causing the
+            # "reopen in a loop" bug. Checking WND_PROP_VISIBLE catches this.
+            try:
+                if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
+                    print("[WINDOW] Window closed by user, exiting measurement loop")
+                    break
+            except cv2.error:
+                # Window doesn't exist at all — also means it was closed
+                print("[WINDOW] Window destroyed, exiting measurement loop")
+                break
+            
+            # Check external stop flag (set by signal handler in measurement_worker)
+            if getattr(self, 'should_stop', False):
+                print("[STOP] Stop signal received, exiting measurement loop")
                 break
             
             key = cv2.waitKey(1) & 0xFF

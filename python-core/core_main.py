@@ -131,7 +131,7 @@ def run_api_server():
         }
 
     # ── Helper: gracefully stop a worker process ──
-    def _graceful_stop_worker(proc, label='worker', timeout_s=3.0):
+    def _graceful_stop_worker(proc, label='worker', timeout_s=6.0):
         """Terminate a worker process, giving it time to release hardware (camera).
         Falls back to kill() if the process doesn't exit within timeout_s seconds.
         """

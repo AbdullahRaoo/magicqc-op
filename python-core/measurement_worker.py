@@ -99,6 +99,23 @@ def run_headless_measurement():
         # Initialize the new CV engine
         measurer = LiveKeypointDistanceMeasurer()
 
+        # ── CRITICAL: Register signal handlers for graceful shutdown ──
+        # When the API server calls _graceful_stop_worker(), it sends SIGTERM.
+        # Without this handler, the cv2.waitKey() loop blocks signal delivery,
+        # the process gets force-killed after timeout, and the finally block
+        # (which releases the camera) NEVER runs — leaving the USB camera locked.
+        import signal
+        def _signal_handler(signum, _frame):
+            sig_name = signal.Signals(signum).name if hasattr(signal, 'Signals') else str(signum)
+            print(f"[SIGNAL] Received {sig_name}, requesting graceful stop...")
+            measurer.should_stop = True
+
+        signal.signal(signal.SIGTERM, _signal_handler)
+        signal.signal(signal.SIGINT, _signal_handler)
+        # On Windows, also handle SIGBREAK (Ctrl+Break / taskkill)
+        if hasattr(signal, 'SIGBREAK'):
+            signal.signal(signal.SIGBREAK, _signal_handler)
+
         # Set garment color BEFORE camera initialization (API-driven, no terminal input)
         measurer.set_garment_color(garment_color)
 
