@@ -192,9 +192,9 @@ export function ArticlesList() {
       }
     }
     node.addEventListener('wheel', handler, { passive: false })
-    // Cleanup via dataset flag to avoid double-binding
-    ;(node as any).__hwCleanup?.()
-    ;(node as any).__hwCleanup = () => node.removeEventListener('wheel', handler)
+      // Cleanup via dataset flag to avoid double-binding
+      ; (node as any).__hwCleanup?.()
+      ; (node as any).__hwCleanup = () => node.removeEventListener('wheel', handler)
   }, [])
 
   // Fetch brands on mount
@@ -1244,11 +1244,45 @@ export function ArticlesList() {
     }
   }
 
-  // Handle QC popup close - just close popup, allow user to continue with other side
+  // Handle QC popup close - clears measurement values but KEEPS the selected article
+  // This allows the same article to be re-measured for a different quantity
+  // (each quantity is saved as a separate entry in the database)
   const handleQCClose = () => {
-    console.log('[QC] Closing QC popup - user can continue measuring other side')
+    console.log('[QC-CLOSE] Clearing measurements, keeping article selection for next quantity')
+
+    // Hide QC popup
     setShowQCResult(false)
-    setMeasurementComplete(false) // Allow further measurements
+
+    // Clear all measurement values so the table shows fresh/empty for next quantity
+    setMeasuredValues({})
+    setEditableTols({})
+    setFrontMeasuredValues({})
+    setBackMeasuredValues({})
+
+    // Reset side completion flags so user can re-measure front/back
+    setFrontSideComplete(false)
+    setBackSideComplete(false)
+    setFrontQCChecked(false)
+    setBackQCChecked(false)
+    setFrontSelectedIds(new Set())
+    setBackSelectedIds(new Set())
+    setLastQCSide(null)
+
+    // Reset measurement lifecycle flags
+    setMeasurementComplete(false)
+    setIsMeasurementEnabled(false)
+    setIsShiftLocked(false)
+    setIsPollingActive(false)
+    setCurrentMeasurementSide(null)
+
+    // Reset QC state
+    setQcPassed(true)
+    setFailedMeasurements([])
+
+    // Keep: selectedBrandId, selectedArticleTypeId, selectedArticleId,
+    //       selectedPOId, selectedPOArticleId, selectedSize, selectedColor,
+    //       measurementSpecs, selectedMeasurementIds
+    // → User can immediately start a new front/back measurement on the same article
   }
 
   // Handle Next Article — proper industrial inspection flow:

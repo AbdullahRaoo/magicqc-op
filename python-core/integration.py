@@ -48,7 +48,7 @@ class LiveKeypointDistanceMeasurer:
         self.pan_y = 0
         self.current_format = None
         self.last_measurements = []
-        self.placement_box = []  # [x1, y1, x2, y2] for shirt placement guide
+        self.placement_box = []  # [x1, y1, x2, y2] for garment placement guide
         self.back_placement_box = []  # [x1, y1, x2, y2] for back side placement guide
 
         # Diagnostic: call counter for periodic logging in save_live_measurements
@@ -1791,7 +1791,7 @@ class LiveKeypointDistanceMeasurer:
         
         cv2.rectangle(display_frame, disp_p1, disp_p2, (0, 255, 0), 3)
         
-        guide_text = "PLACE SHIRT HERE"
+        guide_text = "PLACE GARMENT HERE"
         text_size = cv2.getTextSize(guide_text, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)[0]
         text_x = (disp_p1[0] + disp_p2[0] - text_size[0]) // 2
         text_y = disp_p1[1] - 10
@@ -1886,7 +1886,7 @@ class LiveKeypointDistanceMeasurer:
             elif choice == '3':
                 if self.load_calibration():
                     if self.annotate_measurement_points('front'):
-                        add_box = input("Do you want to add a placement guide box for shirt positioning? (y/n): ").strip().lower()
+                        add_box = input("Do you want to add a placement guide box for garment positioning? (y/n): ").strip().lower()
                         if add_box == 'y' or add_box == 'yes':
                             if self.annotate_placement_guide_box():
                                 print("✅ Placement guide box added!")
@@ -1911,7 +1911,7 @@ class LiveKeypointDistanceMeasurer:
                 if self.calibrate_with_object():
                     self.save_calibration()
                     if self.annotate_measurement_points('front'):
-                        add_box = input("Do you want to add a placement guide box for shirt positioning? (y/n): ").strip().lower()
+                        add_box = input("Do you want to add a placement guide box for garment positioning? (y/n): ").strip().lower()
                         if add_box == 'y' or add_box == 'yes':
                             if self.annotate_placement_guide_box():
                                 print("✅ Placement guide box added!")
@@ -1949,7 +1949,7 @@ class LiveKeypointDistanceMeasurer:
                     side = input("Create annotation for (f)ront or (b)ack? ").strip().lower()
                     if side == 'f' or side == 'front':
                         if self.annotate_measurement_points('front'):
-                            add_box = input("Do you want to add a placement guide box for shirt positioning? (y/n): ").strip().lower()
+                            add_box = input("Do you want to add a placement guide box for garment positioning? (y/n): ").strip().lower()
                             if add_box == 'y' or add_box == 'yes':
                                 if self.annotate_placement_guide_box():
                                     print("✅ Placement guide box added!")
@@ -2393,12 +2393,12 @@ class LiveKeypointDistanceMeasurer:
         cv2.waitKey(5000)
 
     def annotate_placement_guide_box(self):
-        """Step 2.5: Annotate placement guide box for accurate shirt positioning"""
+        """Step 2.5: Annotate placement guide box for accurate garment positioning"""
         print("\n" + "="*60)
         print("STEP 2.5: PLACEMENT GUIDE BOX ANNOTATION")
         print("="*60)
-        print("Draw a rectangle around the area where the shirt should be placed.")
-        print("This will help you position the shirt accurately for measurements.")
+        print("Draw a rectangle around the area where the garment should be placed.")
+        print("This will help you position the garment accurately for measurements.")
         
         if self.reference_image is None:
             print("❌ No reference image available!")
@@ -2433,7 +2433,7 @@ class LiveKeypointDistanceMeasurer:
                              (0, 255, 255), -1)
                 cv2.addWeighted(overlay, 0.2, img, 0.8, 0, img)
                 
-                text = "SHIRT PLACEMENT GUIDE"
+                text = "GARMENT PLACEMENT GUIDE"
                 text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1.0, 3)[0]
                 text_x = (disp_start[0] + disp_current[0] - text_size[0]) // 2
                 text_y = (disp_start[1] + disp_current[1] + text_size[1]) // 2
@@ -2469,7 +2469,7 @@ class LiveKeypointDistanceMeasurer:
                     print(f"Box completed: ({self.placement_box[0]}, {self.placement_box[1]}) to ({self.placement_box[2]}, {self.placement_box[3]})")
                     redraw_box_annotation(image_copy, temp_box[0], [orig_x, orig_y], final=True)
         
-        window_name = "Placement Guide - Draw box for shirt positioning (Press H for help)"
+        window_name = "Placement Guide - Draw box for garment positioning (Press H for help)"
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
         cv2.setMouseCallback(window_name, box_mouse_callback)
         
@@ -2478,7 +2478,7 @@ class LiveKeypointDistanceMeasurer:
             image_copy[:] = self.apply_zoom(image_copy)
         self.show_box_instructions(image_copy, window_name)
         
-        print("Placement guide window opened. Draw a rectangle for shirt positioning.")
+        print("Placement guide window opened. Draw a rectangle for garment positioning.")
         
         while True:
             cv2.imshow(window_name, image_copy)
@@ -2581,7 +2581,7 @@ class LiveKeypointDistanceMeasurer:
             "H - Show this help",
             "Q - Quit without saving",
             "",
-            "Draw a box around where the shirt",
+            "Draw a box around where the garment",
             "should be placed for accurate measurements"
         ]
         
@@ -2896,6 +2896,28 @@ class LiveKeypointDistanceMeasurer:
         
         cv2.setMouseCallback(window_name, self.live_mouse_callback)
         
+        # ── Show a loading screen immediately (avoids grey flash) ──
+        import numpy as np
+        loading_h = int(sec_h) if sec_h else 800
+        loading_w = int(sec_w) if sec_w else 1200
+        loading_frame = np.zeros((loading_h, loading_w, 3), dtype=np.uint8)
+        # Dark teal background
+        loading_frame[:] = (40, 40, 40)
+        # Center text
+        text = "Initializing Camera..."
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        text_size = cv2.getTextSize(text, font, 1.5, 2)[0]
+        tx = (loading_w - text_size[0]) // 2
+        ty = (loading_h + text_size[1]) // 2
+        cv2.putText(loading_frame, text, (tx, ty), font, 1.5, (0, 200, 180), 2, cv2.LINE_AA)
+        # Sub-text
+        sub = "Please wait..."
+        sub_size = cv2.getTextSize(sub, font, 0.8, 1)[0]
+        cv2.putText(loading_frame, sub, ((loading_w - sub_size[0]) // 2, ty + 50),
+                    font, 0.8, (120, 120, 120), 1, cv2.LINE_AA)
+        cv2.imshow(window_name, loading_frame)
+        cv2.waitKey(1)  # Force the loading screen to render
+        
         terminal_update_counter = 0
         self.keypoint_stabilized = False
         self.last_valid_keypoints = []
@@ -3059,26 +3081,37 @@ class LiveKeypointDistanceMeasurer:
             cv2.putText(display_frame, "Controls: P=Pause, B=Side, Z/X=Zoom", 
                        (620, bottom_y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (150, 150, 150), 2)
             
-            cv2.imshow(window_name, display_frame)
-            
-            # ── Detect window closed by user (ALT+F4, X button, taskbar close) ──
-            # cv2.imshow() silently RECREATES a destroyed window, causing the
-            # "reopen in a loop" bug. Checking WND_PROP_VISIBLE catches this.
+            # ── Check for stop/close BEFORE cv2.imshow() ──
+            # ALT+F4 / taskbar close destroys the window during waitKey().
+            # We MUST check before imshow(), because imshow() silently recreates
+            # a destroyed window, making it look like the window "reopened".
+            if getattr(self, 'should_stop', False):
+                print("[STOP] Stop signal received, exiting measurement loop")
+                break
             try:
                 if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
                     print("[WINDOW] Window closed by user, exiting measurement loop")
                     break
             except cv2.error:
-                # Window doesn't exist at all — also means it was closed
                 print("[WINDOW] Window destroyed, exiting measurement loop")
                 break
             
-            # Check external stop flag (set by signal handler in measurement_worker)
-            if getattr(self, 'should_stop', False):
-                print("[STOP] Stop signal received, exiting measurement loop")
-                break
+            cv2.imshow(window_name, display_frame)
             
             key = cv2.waitKey(1) & 0xFF
+            
+            # ── Re-check after waitKey (close events are processed during waitKey) ──
+            if getattr(self, 'should_stop', False):
+                print("[STOP] Stop signal received during waitKey, exiting")
+                break
+            try:
+                if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
+                    print("[WINDOW] Window closed during waitKey, exiting")
+                    break
+            except cv2.error:
+                print("[WINDOW] Window destroyed during waitKey, exiting")
+                break
+            
             if key == ord('q') or key == ord('Q'):
                 break
             elif key == ord('p') or key == ord('P'):

@@ -1399,7 +1399,7 @@ def run_api_server():
 
     @app.route('/api/register/start', methods=['POST'])
     def start_registration():
-        """Start shirt registration process"""
+        """Start garment registration process"""
         nonlocal registration_process, registration_status
 
         try:
@@ -1488,10 +1488,10 @@ def run_api_server():
 
             return jsonify({
                 'status': 'success',
-                'message': f'Shirt registration started for size {size}',
+                'message': f'Garment registration started for size {size}',
                 'data': {
                     'size': size,
-                    'instructions': 'The Python registration window will open. Follow the on-screen instructions to capture and annotate the shirt.'
+                    'instructions': 'The Python registration window will open. Follow the on-screen instructions to capture and annotate the garment.'
                 }
             })
 
