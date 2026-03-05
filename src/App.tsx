@@ -64,13 +64,13 @@ function AppContent() {
       setIsCalibrating(true)
       console.log('[CALIBRATION] Starting calibration process...')
 
-      const result = await window.measurement.startCalibration()
+      const result = await window.measurement.startCalibration(distanceValue ? parseFloat(distanceValue) : undefined)
       if (result.status === 'success') {
         console.log('[CALIBRATION] Calibration window opened')
         // Poll for completion
         const pollInterval = setInterval(async () => {
           const statusResult = await window.measurement.getCalibrationStatus()
-          if (statusResult.status === 'success' && statusResult.data?.calibrated) {
+          if (statusResult.status === 'success' && statusResult.data?.calibrated && !statusResult.data?.running) {
             console.log('[CALIBRATION] Calibration completed!')
             setIsCalibrating(false)
             setCalibrationStep('success')
@@ -654,7 +654,7 @@ function AppContent() {
                       </div>
                     </div>
                     <p className="text-touch-xs text-primary font-medium mt-3 border-t pt-3">
-                      📍 Click two points on your reference object, then press <strong>S</strong> and enter the distance.
+                      📍 Click two points on your reference object, then press <strong>S</strong> to save the calibration.
                     </p>
                   </div>
 
@@ -682,8 +682,8 @@ function AppContent() {
                   <div className="bg-slate-50 rounded-xl p-4 text-left text-touch-xs text-slate-600">
                     <p>• Left-click to place calibration points</p>
                     <p>• Right-click to remove nearest point</p>
-                    <p>• Press S when 2 points are marked</p>
-                    <p>• Enter distance value when prompted</p>
+                    <p>• Press S when 2 points are marked to save</p>
+                    <p>• The reference distance you entered will be used automatically</p>
                   </div>
                 </div>
               )}

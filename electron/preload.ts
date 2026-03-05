@@ -86,7 +86,7 @@ contextBridge.exposeInMainWorld('measurement', {
   getLiveResults: () => ipcRenderer.invoke('measurement:getLiveResults'),
   loadTestImage: (relativePath: string) => ipcRenderer.invoke('measurement:loadTestImage', relativePath),
   // Calibration methods
-  startCalibration: () => ipcRenderer.invoke('measurement:startCalibration'),
+  startCalibration: (referenceLengthCm?: number) => ipcRenderer.invoke('measurement:startCalibration', referenceLengthCm),
   getCalibrationStatus: () => ipcRenderer.invoke('measurement:getCalibrationStatus'),
   cancelCalibration: () => ipcRenderer.invoke('measurement:cancelCalibration'),
   uploadCalibration: (calibrationData: {

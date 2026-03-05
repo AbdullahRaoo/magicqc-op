@@ -2877,6 +2877,23 @@ class LiveKeypointDistanceMeasurer:
             cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
             cv2.resizeWindow(window_name, 1200, 800)
         
+        # Position on secondary screen if available (env vars set by Electron)
+        sec_x = os.environ.get('SECONDARY_SCREEN_X')
+        sec_y = os.environ.get('SECONDARY_SCREEN_Y')
+        sec_w = os.environ.get('SECONDARY_SCREEN_WIDTH')
+        sec_h = os.environ.get('SECONDARY_SCREEN_HEIGHT')
+        if sec_x is not None and sec_y is not None and sec_w and sec_h:
+            # Use explicit resize instead of WND_PROP_FULLSCREEN — OpenCV's
+            # FULLSCREEN flag on Windows always fullscreens on primary monitor.
+            cv2.moveWindow(window_name, int(sec_x), int(sec_y))
+            cv2.resizeWindow(window_name, int(sec_w), int(sec_h))
+            print(f"[DISPLAY] Measurement window {sec_w}x{sec_h} on secondary screen ({sec_x}, {sec_y})")
+        else:
+            if headless:
+                # Single screen headless: fullscreen on primary
+                cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+            print("[DISPLAY] Single screen mode - measurement window on primary")
+        
         cv2.setMouseCallback(window_name, self.live_mouse_callback)
         
         terminal_update_counter = 0

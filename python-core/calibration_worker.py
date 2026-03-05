@@ -452,6 +452,21 @@ class CameraCalibrator:
         cv2.resizeWindow(window_name, 1200, 800)
         cv2.setMouseCallback(window_name, mouse_callback)
 
+        # Position on secondary screen if available (env vars set by Electron)
+        sec_x = os.environ.get('SECONDARY_SCREEN_X')
+        sec_y = os.environ.get('SECONDARY_SCREEN_Y')
+        sec_w = os.environ.get('SECONDARY_SCREEN_WIDTH')
+        sec_h = os.environ.get('SECONDARY_SCREEN_HEIGHT')
+        if sec_x is not None and sec_y is not None and sec_w and sec_h:
+            # Move + resize first, THEN set FULLSCREEN. Setting fullscreen AFTER
+            # the window is on the secondary screen makes OpenCV apply it correctly.
+            cv2.moveWindow(window_name, int(sec_x), int(sec_y))
+            cv2.resizeWindow(window_name, int(sec_w), int(sec_h))
+            cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+            print(f"[DISPLAY] Calibration window {sec_w}x{sec_h} fullscreen on secondary screen ({sec_x}, {sec_y})")
+        else:
+            print("[DISPLAY] Single screen mode - calibration window on primary")
+
         print("\n[*] Calibration window opened.")
         print("[*] Click on two points marking a known distance.")
         print("[*] Press 'H' for help, 'S' to save, 'Q' to quit.")
@@ -469,18 +484,22 @@ class CameraCalibrator:
                     pixel_distance = math.sqrt((cal_points[1][0] - cal_points[0][0]) ** 2 +
                                               (cal_points[1][1] - cal_points[0][1]) ** 2)
 
-                    # Ask for real distance
-                    print("\n" + "=" * 60)
-                    print("Enter the real-world distance between the two points")
-                    print("=" * 60)
-
                     try:
-                        # Use cv2-based input instead of stdin input() (stdin=DEVNULL in production)
-                        distance_input = self._cv2_text_input(window_name, "Distance in centimeters:", image_copy)
-                        if distance_input is None:
-                            print("[*] Distance input cancelled.")
-                            continue
-                        self.reference_length_cm = float(distance_input)
+                        # Check if reference distance was pre-set from the React UI
+                        preset_distance = os.environ.get('CALIBRATION_REFERENCE_CM')
+                        if preset_distance:
+                            self.reference_length_cm = float(preset_distance)
+                            print(f"[*] Using pre-set reference distance: {self.reference_length_cm} cm")
+                        else:
+                            # Fallback: ask via cv2-based input (stdin=DEVNULL in production)
+                            print("\n" + "=" * 60)
+                            print("Enter the real-world distance between the two points")
+                            print("=" * 60)
+                            distance_input = self._cv2_text_input(window_name, "Distance in centimeters:", image_copy)
+                            if distance_input is None:
+                                print("[*] Distance input cancelled.")
+                                continue
+                            self.reference_length_cm = float(distance_input)
 
                         if self.reference_length_cm <= 0:
                             raise ValueError("Distance must be positive")

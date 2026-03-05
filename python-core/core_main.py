@@ -1141,7 +1141,19 @@ def run_api_server():
 
     @app.route('/api/calibration/status', methods=['GET'])
     def get_calibration_status():
-        """Check if calibration exists"""
+        """Check if calibration exists or is running"""
+        # If calibration is actively running, report running state
+        # (don't read stale file — it still has the OLD calibration data)
+        if calibration_status['running']:
+            return jsonify({
+                'status': 'success',
+                'data': {
+                    'calibrated': False,
+                    'running': True,
+                    'calibration_status': calibration_status['status']
+                }
+            })
+
         # STORAGE_ROOT is always writable (userData on Program Files installs).
         # Electron migrates the template from PROJECT_ROOT to STORAGE_ROOT on first launch.
         calibration_file = os.path.join(STORAGE_ROOT, 'camera_calibration.json')
@@ -1159,14 +1171,16 @@ def run_api_server():
                     'calibrated': calibration_data.get('is_calibrated', False),
                     'pixels_per_cm': calibration_data.get('pixels_per_cm', 0),
                     'reference_length_cm': calibration_data.get('reference_length_cm', 0),
-                    'calibration_date': calibration_data.get('calibration_date', None)
+                    'calibration_date': calibration_data.get('calibration_date', None),
+                    'running': False
                 }
             })
         else:
             return jsonify({
                 'status': 'success',
                 'data': {
-                    'calibrated': False
+                    'calibrated': False,
+                    'running': False
                 }
             })
 
@@ -1230,6 +1244,11 @@ def run_api_server():
                 'message': 'Calibration is already in progress'
             }), 409
 
+        # Read reference distance from POST body (set by React UI)
+        data = request.get_json(silent=True) or {}
+        reference_length_cm = data.get('reference_length_cm')
+        print(f"[CALIBRATION] Starting with reference_length_cm={reference_length_cm}")
+
         calibration_status = {
             'running': True,
             'status': 'starting',
@@ -1245,12 +1264,28 @@ def run_api_server():
                     cal_cmd = [sys.executable, '--worker', 'calibration', '--force-new']
                 else:
                     cal_cmd = [sys.executable, os.path.abspath(__file__), '--worker', 'calibration', '--force-new']
+
+                # Build env with reference distance if provided
+                cal_env = {**os.environ, 'PYTHONIOENCODING': 'utf-8'}
+                if reference_length_cm is not None:
+                    cal_env['CALIBRATION_REFERENCE_CM'] = str(reference_length_cm)
+
+                popen_kw = _hidden_popen_kwargs()
+                popen_kw['stdout'] = subprocess.PIPE
+                popen_kw['stderr'] = subprocess.STDOUT
+                popen_kw['stdin'] = subprocess.DEVNULL
+
                 calibration_process = subprocess.Popen(
                     cal_cmd,
-                    **_hidden_popen_kwargs(),
-                    env={**os.environ, 'PYTHONIOENCODING': 'utf-8'},
+                    **popen_kw,
+                    env=cal_env,
                     cwd=STORAGE_ROOT  # writable; PROJECT_ROOT may be read-only in prod
                 )
+
+                # Drain stdout so the pipe buffer never fills
+                for raw_line in calibration_process.stdout:
+                    line = raw_line.decode('utf-8', errors='replace').rstrip()
+                    print(f"[CAL-WORKER] {line}")
 
                 calibration_process.wait()
 

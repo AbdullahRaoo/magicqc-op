@@ -1,5 +1,5 @@
 import './env-setup' // MUST BE FIRST - initializes paths and loads .env
-import { app, BrowserWindow, ipcMain, session } from 'electron'
+import { app, BrowserWindow, ipcMain, session, screen } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import fs from 'node:fs'
@@ -166,6 +166,21 @@ async function startPythonServer(isRestart = false): Promise<boolean> {
     pythonLogStream.write(`\n${'='.repeat(60)}\n[${new Date().toISOString()}] Python server ${isRestart ? 'RESTARTING' : 'STARTING'}\n${'='.repeat(60)}\n`)
 
     try {
+      // Detect secondary display for positioning the CV camera window
+      const allDisplays = screen.getAllDisplays()
+      const primaryDisplay = screen.getPrimaryDisplay()
+      const secondaryDisplay = allDisplays.find(d => d.id !== primaryDisplay.id)
+      const secondaryScreenEnv: Record<string, string> = {}
+      if (secondaryDisplay) {
+        secondaryScreenEnv.SECONDARY_SCREEN_X = String(secondaryDisplay.bounds.x)
+        secondaryScreenEnv.SECONDARY_SCREEN_Y = String(secondaryDisplay.bounds.y)
+        secondaryScreenEnv.SECONDARY_SCREEN_WIDTH = String(secondaryDisplay.bounds.width)
+        secondaryScreenEnv.SECONDARY_SCREEN_HEIGHT = String(secondaryDisplay.bounds.height)
+        console.log(`🖥️ Secondary display detected: ${secondaryDisplay.bounds.width}x${secondaryDisplay.bounds.height} at (${secondaryDisplay.bounds.x}, ${secondaryDisplay.bounds.y})`)
+      } else {
+        console.log('🖥️ Single display mode — all windows on primary')
+      }
+
       // Spawn process – fully hidden, no console window for the operator.
       // CWD is strictly set to STORAGE_ROOT for absolute path resolution.
       pythonProcess = spawn(spawnCmd, spawnArgs, {
@@ -173,7 +188,9 @@ async function startPythonServer(isRestart = false): Promise<boolean> {
         env: {
           ...process.env,
           // Explicitly pass storage root to Python for Results/Polling alignment
-          MAGICQC_STORAGE_ROOT: STORAGE_ROOT
+          MAGICQC_STORAGE_ROOT: STORAGE_ROOT,
+          // Pass secondary display coordinates for cv2.moveWindow()
+          ...secondaryScreenEnv
         },
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
@@ -274,8 +291,16 @@ function stopPythonServer() {
 }
 
 function createWindow(opts?: { fingerprint: string; reason: string } | { sdkMissing: true }) {
+  // Place the Operator Panel on the PRIMARY display
+  const primaryDisplay = screen.getPrimaryDisplay()
+  const { x, y, width, height } = primaryDisplay.workArea
+
   win = new BrowserWindow({
     show: false,
+    x,
+    y,
+    width,
+    height,
     backgroundColor: '#f8fafc',
     icon: path.join(process.env.VITE_PUBLIC!, 'favicon.ico'),
     autoHideMenuBar: true,  // Hide File/Edit/View menu bar
@@ -1108,11 +1133,13 @@ function setupMeasurementHandlers() {
   })
 
   // Start camera calibration
-  ipcMain.handle('measurement:startCalibration', async () => {
+  ipcMain.handle('measurement:startCalibration', async (_event, referenceLengthCm?: number) => {
     try {
-      console.log('[MAIN] Starting camera calibration...')
+      console.log(`[MAIN] Starting camera calibration... (reference: ${referenceLengthCm ?? 'not set'} cm)`)
       const response = await fetch(`${PYTHON_API_URL}/api/calibration/start`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reference_length_cm: referenceLengthCm })
       })
       return await response.json()
     } catch (error) {

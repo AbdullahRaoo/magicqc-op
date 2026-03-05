@@ -1,61 +1,124 @@
 {
-    "annotation_name": "11-12 Years",
-    "article_style": "Sweat Shirt",
-    "annotation_json_path": "D:\\work\\react\\operatorPannel-main\\temp_annotations\\Sweat Shirt_11-12 Years_front.json",
-    "reference_image_path": "D:\\work\\react\\operatorPannel-main\\temp_annotations\\Sweat Shirt_11-12 Years.jpg",
+    "annotation_name": "XS",
+    "article_style": "12-C759",
+    "annotation_json_path": "D:\\work\\react\\operatorPannel-main\\temp_annotations\\12-C759_XS-z.json",
+    "reference_image_path": "D:\\work\\react\\operatorPannel-main\\temp_annotations\\12-C759_XS-z.jpg",
     "side": "front",
-    "garment_color": "black",
+    "garment_color": "other",
     "laravel_storage": "D:\\work\\react\\operatorPannel-main\\storage",
     "results_path": "D:\\work\\react\\operatorPannel-main\\storage\\measurement_results",
     "measurement_specs": [
         {
             "index": 0,
-            "db_id": 60,
-            "code": "A",
-            "name": "Left Shoulder",
-            "expected_value": 50
+            "db_id": 120,
+            "code": "JD_H-20",
+            "name": "WAIST CIRC AT CENTER ( RELAXED )",
+            "expected_value": 10.5
         },
         {
             "index": 1,
-            "db_id": 61,
-            "code": "B",
-            "name": "Right Shoulder",
-            "expected_value": 50
+            "db_id": 121,
+            "code": "JD_I-13",
+            "name": "HIP/SEAT, 3 POINT MSMT - LOW HIP",
+            "expected_value": 14.5
         },
         {
             "index": 2,
-            "db_id": 62,
-            "code": "C",
-            "name": "Hem Width",
-            "expected_value": 40.3
+            "db_id": 122,
+            "code": "JD_K-10",
+            "name": "THIGH ( 1\" BELOW CROTCH POINT)",
+            "expected_value": 8.13
         },
         {
             "index": 3,
-            "db_id": 63,
-            "code": "D",
-            "name": "Length",
-            "expected_value": 60
+            "db_id": 123,
+            "code": "JD_K-30",
+            "name": "LEG OPENING RELAXED",
+            "expected_value": 3.5
         },
         {
             "index": 4,
-            "db_id": 64,
-            "code": "E",
-            "name": "Cuff Length",
-            "expected_value": 8
+            "db_id": 124,
+            "code": "JD_A-09",
+            "name": "INSEAM LENGTH",
+            "expected_value": 14.5
         },
         {
             "index": 5,
-            "db_id": 66,
-            "code": "G",
-            "name": "Waist width",
-            "expected_value": 43
+            "db_id": 125,
+            "code": "JD_H-21",
+            "name": "WAIST CIRC AT JOIN SEAM (EXTENDED )",
+            "expected_value": 27
         },
         {
             "index": 6,
-            "db_id": 67,
-            "code": "H",
-            "name": "Chest Width",
-            "expected_value": 53.5
+            "db_id": 126,
+            "code": "JD_H-07",
+            "name": "WAISTBAND  HEIGHT",
+            "expected_value": 1.63
+        },
+        {
+            "index": 7,
+            "db_id": 127,
+            "code": "JD_K-01",
+            "name": "FRONT RISE - TOP OF WB TO CROTCH SEAM",
+            "expected_value": 8
+        },
+        {
+            "index": 8,
+            "db_id": 128,
+            "code": "JD_K-05",
+            "name": "BACK RISE - TOP OF WB TO CROTCH SEAM",
+            "expected_value": 11.25
+        },
+        {
+            "index": 9,
+            "db_id": 129,
+            "code": "JD_Q-21",
+            "name": "EYELET/GROMMET DISTANCE APART",
+            "expected_value": 1.5
+        },
+        {
+            "index": 10,
+            "db_id": 130,
+            "code": "JD_Q-19",
+            "name": "DRAWSTRING LENGTH EXPOSED WHEN WB FULLY EXTENDED",
+            "expected_value": 2.5
+        },
+        {
+            "index": 11,
+            "db_id": 131,
+            "code": "JD_I-08",
+            "name": "LOW HIP PLACEMENT UP FROM CROTCH SEAM",
+            "expected_value": 2
+        },
+        {
+            "index": 12,
+            "db_id": 132,
+            "code": "JD_L-02",
+            "name": "KNEE PLACEMENT FROM CROTCH",
+            "expected_value": 8.75
+        },
+        {
+            "index": 13,
+            "db_id": 133,
+            "code": "JD_K-24",
+            "name": "KNEE  CIRCUMFERENCE",
+            "expected_value": 11.5
+        },
+        {
+            "index": 14,
+            "db_id": 134,
+            "code": "JD_G-81",
+            "name": "CUFF HEIGHT",
+            "expected_value": 2.25
+        },
+        {
+            "index": 15,
+            "db_id": 135,
+            "code": "JD_O-13",
+            "name": "ONSEAM POCKET ZIPPER OPENING LENGTH",
+            "expected_value": 4
         }
     ]
 }

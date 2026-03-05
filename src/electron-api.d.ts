@@ -113,8 +113,8 @@ interface MeasurementAPI {
     getStatus: () => Promise<{ status: string; running?: boolean; data?: any }>
     getLiveResults: () => Promise<{ status: string; data: any; message?: string }>
     loadTestImage: (relativePath: string) => Promise<{ status: string; data?: string; message?: string }>
-    startCalibration: () => Promise<{ status: string; message: string }>
-    getCalibrationStatus: () => Promise<{ status: string; data: { calibrated: boolean; pixels_per_cm?: number; reference_length_cm?: number; calibration_date?: string } }>
+    startCalibration: (referenceLengthCm?: number) => Promise<{ status: string; message: string }>
+    getCalibrationStatus: () => Promise<{ status: string; data: { calibrated: boolean; running?: boolean; pixels_per_cm?: number; reference_length_cm?: number; calibration_date?: string; calibration_status?: string } }>
     cancelCalibration: () => Promise<{ status: string; message: string }>
     uploadCalibration: (calibrationData: {
         pixels_per_cm: number
