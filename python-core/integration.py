@@ -563,8 +563,22 @@ class LiveKeypointDistanceMeasurer:
         try:
             camera_list = CameraEnumerateDevice()
             if len(camera_list) == 0:
-                print("No camera found!")
-                return False
+                # ── Retry with backoff: USB device may still be re-enumerating ──
+                # CameraUnInit() from a previous session triggers a USB reset.
+                # On Windows, USB re-enumeration takes 1–3 seconds.
+                max_retries = 5
+                for attempt in range(max_retries):
+                    wait = 0.5 * (attempt + 1)
+                    print(f"[CAMERA] No camera found, waiting {wait}s for USB re-enumeration... ({attempt + 1}/{max_retries})")
+                    time.sleep(wait)
+                    camera_list = CameraEnumerateDevice()
+                    if len(camera_list) > 0:
+                        print(f"[CAMERA] Camera found after {attempt + 1} retry(ies)")
+                        break
+                
+                if len(camera_list) == 0:
+                    print("[CAMERA] No camera found after all retries!")
+                    return False
                 
             print(f"Found {len(camera_list)} camera(s)")
             self.DevInfo = camera_list[0]
