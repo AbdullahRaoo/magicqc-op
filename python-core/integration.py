@@ -3114,7 +3114,7 @@ class LiveKeypointDistanceMeasurer:
             
             cv2.imshow(window_name, display_frame)
             
-            key = cv2.waitKey(1) & 0xFF
+            key = cv2.waitKey(8) & 0xFF  # ~120fps cap: yields CPU between frames, prevents 100% core peg
             
             # ── Re-check after waitKey (close events are processed during waitKey) ──
             if getattr(self, 'should_stop', False):

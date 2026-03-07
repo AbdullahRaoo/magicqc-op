@@ -1,12 +1,12 @@
 """
-Build script — compile core_main.py into a single Windows executable.
+Build script — compile core_main.py into a Windows executable directory.
 
 Usage:
     cd python-core
     python build_exe.py
 
 Output:
-    python-core/dist/magicqc_core.exe
+    python-core/dist/magicqc_core/magicqc_core.exe  (--onedir: no extraction on each launch)
 """
 import PyInstaller.__main__
 import os
@@ -380,7 +380,8 @@ def build():
 
     args = [
         SCRIPT,
-        '--onefile',
+        '--onedir',          # One directory — no extraction on every launch (vs --onefile)
+                             # Eliminates the 10-30s startup freeze from temp-dir extraction
         '--noconsole',
         f'--name={EXE_NAME}',
         f'--distpath={os.path.join(here, "dist")}',
@@ -427,12 +428,18 @@ def build():
         raise SystemExit(1)
 
     # Stage 3: Bundle → Verify exe exists
+    # With --onedir, output is dist/magicqc_core/magicqc_core.exe
     print('\n[Stage 3/4] Bundle → Verifying executable...')
-    exe_path = os.path.join(here, 'dist', f'{EXE_NAME}.exe')
+    exe_path = os.path.join(here, 'dist', EXE_NAME, f'{EXE_NAME}.exe')
+    dist_dir = os.path.join(here, 'dist', EXE_NAME)
     if os.path.isfile(exe_path):
-        size_mb = os.path.getsize(exe_path) / (1024 * 1024)
-        print(f'   ✓ Executable created: {os.path.basename(exe_path)}')
-        print(f'   ✓ Size: {size_mb:.1f} MB')
+        total_size = sum(
+            os.path.getsize(os.path.join(root, f))
+            for root, _, files in os.walk(dist_dir) for f in files
+        )
+        size_mb = total_size / (1024 * 1024)
+        print(f'   ✓ Executable created: {os.path.relpath(exe_path, here)}')
+        print(f'   ✓ Distribution size: {size_mb:.1f} MB (--onedir bundle)')
     else:
         print(f'\n❌ Build failed — {exe_path} not found')
         raise SystemExit(1)
@@ -442,7 +449,7 @@ def build():
     ensure_runtime_dirs(here)
     
     print(f'\n{"="*60}')
-    print(f'✅ Build successful: {exe_path}')
+    print(f'✅ Build successful: {dist_dir}')
     print(f'{"="*60}\n')
 
 

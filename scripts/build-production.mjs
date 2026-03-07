@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.resolve(__dirname, '..')
 
-function run (cmd, args, opts = {}) {
+function run(cmd, args, opts = {}) {
   return new Promise((resolve, reject) => {
     const cwd = opts.cwd || projectRoot
     const child = spawn(cmd, args, {
@@ -31,7 +31,7 @@ function run (cmd, args, opts = {}) {
   })
 }
 
-async function main () {
+async function main() {
   const args = process.argv.slice(2)
   const useProd = args.includes('--prod')
   const noValidate = args.includes('--no-validate')
@@ -39,7 +39,7 @@ async function main () {
   console.log('Step 1: Building Python core (PyInstaller)...\n')
   await run('python', ['build_exe.py'], { cwd: path.join(projectRoot, 'python-core') })
 
-  const exePath = path.join(projectRoot, 'python-core', 'dist', 'magicqc_core.exe')
+  const exePath = path.join(projectRoot, 'python-core', 'dist', 'magicqc_core', 'magicqc_core.exe')
   const { existsSync, mkdirSync } = await import('node:fs')
   if (!existsSync(exePath)) {
     throw new Error('Python exe not found after build: ' + exePath)

@@ -128,9 +128,10 @@ async function startPythonServer(isRestart = false): Promise<boolean> {
   }
 
   return new Promise((resolve) => {
-    // Production: spawn compiled exe directly (no Python interpreter needed)
+    // Production: spawn compiled exe directory (--onedir: no extraction on each launch = no startup freeze)
     // Dev:        spawn venv python (or system python as fallback) with script path
-    const exePath = path.join(process.env.APP_ROOT!, 'python-core', 'dist', 'magicqc_core.exe')
+    // --onedir output: python-core/dist/magicqc_core/magicqc_core.exe
+    const exePath = path.join(process.env.APP_ROOT!, 'python-core', 'dist', 'magicqc_core', 'magicqc_core.exe')
     const scriptPath = path.join(process.env.APP_ROOT!, 'python-core', 'core_main.py')
 
     // In dev mode, prefer .venv Python so all packages are available
@@ -172,11 +173,16 @@ async function startPythonServer(isRestart = false): Promise<boolean> {
       const secondaryDisplay = allDisplays.find(d => d.id !== primaryDisplay.id)
       const secondaryScreenEnv: Record<string, string> = {}
       if (secondaryDisplay) {
-        secondaryScreenEnv.SECONDARY_SCREEN_X = String(secondaryDisplay.bounds.x)
-        secondaryScreenEnv.SECONDARY_SCREEN_Y = String(secondaryDisplay.bounds.y)
-        secondaryScreenEnv.SECONDARY_SCREEN_WIDTH = String(secondaryDisplay.bounds.width)
-        secondaryScreenEnv.SECONDARY_SCREEN_HEIGHT = String(secondaryDisplay.bounds.height)
-        console.log(`🖥️ Secondary display detected: ${secondaryDisplay.bounds.width}x${secondaryDisplay.bounds.height} at (${secondaryDisplay.bounds.x}, ${secondaryDisplay.bounds.y})`)
+        // ── DPI-aware dimensions ──
+        // Electron's bounds.width/height are in *logical* CSS pixels.
+        // On Windows with 125%/150% DPI scaling, cv2.resizeWindow() needs
+        // *physical* pixels to fill the whole monitor. Multiply by scaleFactor.
+        const sf = secondaryDisplay.scaleFactor ?? 1
+        secondaryScreenEnv.SECONDARY_SCREEN_X = String(Math.round(secondaryDisplay.bounds.x * sf))
+        secondaryScreenEnv.SECONDARY_SCREEN_Y = String(Math.round(secondaryDisplay.bounds.y * sf))
+        secondaryScreenEnv.SECONDARY_SCREEN_WIDTH = String(Math.round(secondaryDisplay.bounds.width * sf))
+        secondaryScreenEnv.SECONDARY_SCREEN_HEIGHT = String(Math.round(secondaryDisplay.bounds.height * sf))
+        console.log(`🖥️ Secondary display detected: ${secondaryDisplay.bounds.width}x${secondaryDisplay.bounds.height} logical → ${secondaryScreenEnv.SECONDARY_SCREEN_WIDTH}x${secondaryScreenEnv.SECONDARY_SCREEN_HEIGHT} physical (DPI scale: ${sf}) at (${secondaryScreenEnv.SECONDARY_SCREEN_X}, ${secondaryScreenEnv.SECONDARY_SCREEN_Y})`)
       } else {
         console.log('🖥️ Single display mode — all windows on primary')
       }

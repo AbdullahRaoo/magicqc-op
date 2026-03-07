@@ -22,7 +22,7 @@ const projectRoot = path.resolve(__dirname, '..')
 const envPath = path.join(projectRoot, '.env')
 try {
   require('dotenv').config({ path: envPath })
-} catch (_) {}
+} catch (_) { }
 
 const pythonHost = process.env.PYTHON_API_HOST || 'localhost'
 const pythonPort = process.env.PYTHON_API_PORT || '5000'
@@ -38,12 +38,12 @@ const skipMagicQC = args.includes('--skip-magicqc')
 
 let pythonProcess = null
 
-function log (msg, type = 'info') {
+function log(msg, type = 'info') {
   const prefix = type === 'err' ? '❌' : type === 'ok' ? '✅' : '🔍'
   console.log(`${prefix} ${msg}`)
 }
 
-async function fetchWithTimeout (url, options = {}, timeoutMs = 15000) {
+async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
   const c = new AbortController()
   const t = setTimeout(() => c.abort(), timeoutMs)
   try {
@@ -56,18 +56,18 @@ async function fetchWithTimeout (url, options = {}, timeoutMs = 15000) {
   }
 }
 
-async function waitForHealth (maxAttempts = 15, intervalMs = 500) {
+async function waitForHealth(maxAttempts = 15, intervalMs = 500) {
   for (let i = 0; i < maxAttempts; i++) {
     try {
       const res = await fetchWithTimeout(`${PYTHON_API_URL}/health`, {}, 3000)
       if (res.ok) return true
-    } catch (_) {}
+    } catch (_) { }
     await new Promise(r => setTimeout(r, intervalMs))
   }
   return false
 }
 
-async function validatePythonApis () {
+async function validatePythonApis() {
   // 1. Health
   try {
     const res = await fetchWithTimeout(`${PYTHON_API_URL}/health`, {}, 5000)
@@ -130,7 +130,7 @@ async function validatePythonApis () {
   return true
 }
 
-async function validateMagicQC () {
+async function validateMagicQC() {
   if (!MAGICQC_API_KEY) {
     log('MAGICQC_API_KEY not set — skipping MagicQC auth/ping', 'info')
     return true
@@ -148,8 +148,8 @@ async function validateMagicQC () {
   return true
 }
 
-function startPythonProcess () {
-  const exePath = path.join(projectRoot, 'python-core', 'dist', 'magicqc_core.exe')
+function startPythonProcess() {
+  const exePath = path.join(projectRoot, 'python-core', 'dist', 'magicqc_core', 'magicqc_core.exe')
   const fs = require('node:fs')
   if (!fs.existsSync(exePath)) {
     log(`Python exe not found: ${exePath}`, 'err')
@@ -167,7 +167,7 @@ function startPythonProcess () {
   return true
 }
 
-function stopPythonProcess () {
+function stopPythonProcess() {
   if (pythonProcess) {
     pythonProcess.kill('SIGTERM')
     pythonProcess = null
@@ -175,7 +175,7 @@ function stopPythonProcess () {
   }
 }
 
-async function main () {
+async function main() {
   console.log('Staged API validation\n')
   if (startPython) {
     if (!startPythonProcess()) process.exit(1)

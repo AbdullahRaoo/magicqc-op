@@ -10,31 +10,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    # ── EXCLUDES ──
-    # ONLY exclude large third-party packages and tkinter (needs Tcl/Tk runtime).
-    # NEVER exclude stdlib modules (unittest, pydoc, doctest, xmlrpc, etc.) —
-    # they are tiny (<50 KB each) and scipy/numpy import them transitively.
-    # Excluding them causes ModuleNotFoundError crashes in production.
-    excludes=[
-        # GUI toolkit (requires Tcl/Tk binaries, not needed)
-        'tkinter',
-        # Large third-party packages we never use
-        'matplotlib', 'pandas', 'pydantic',
-        # ML / deep-learning frameworks
-        'torch', 'torchvision', 'torchaudio',
-        'tensorflow', 'tensorboard', 'keras',
-        'sklearn', 'scikit-learn',
-        'transformers', 'huggingface_hub', 'tokenizers',
-        'safetensors', 'accelerate', 'datasets',
-        # Numeric / symbolic extras
-        'numexpr', 'numba', 'llvmlite', 'sympy',
-        # Interactive / docs
-        'IPython', 'jupyter', 'notebook', 'sphinx',
-        # RPC / proto
-        'grpc', 'grpcio', 'google', 'google.protobuf',
-        # Other heavy packages
-        'tensorstore', 'jax', 'jaxlib',
-    ],
+    excludes=['tkinter', 'matplotlib', 'pandas', 'test', 'unittest', 'xmlrpc', 'pydoc', 'doctest', 'torch', 'torchvision', 'torchaudio', 'tensorflow', 'tensorboard', 'keras', 'sklearn', 'scikit-learn', 'transformers', 'huggingface_hub', 'tokenizers', 'safetensors', 'accelerate', 'datasets', 'numexpr', 'numba', 'llvmlite', 'sympy', 'IPython', 'jupyter', 'notebook', 'sphinx', 'grpc', 'grpcio', 'google', 'google.protobuf', 'tensorstore', 'jax', 'jaxlib', 'pydantic'],
     noarchive=False,
     optimize=0,
 )
@@ -43,20 +19,26 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='magicqc_core',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+)
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='magicqc_core',
 )
