@@ -2929,8 +2929,10 @@ class LiveKeypointDistanceMeasurer:
         sub_size = cv2.getTextSize(sub, font, 0.8, 1)[0]
         cv2.putText(loading_frame, sub, ((loading_w - sub_size[0]) // 2, ty + 50),
                     font, 0.8, (120, 120, 120), 1, cv2.LINE_AA)
-        cv2.imshow(window_name, loading_frame)
-        cv2.waitKey(1)  # Force the loading screen to render
+        # Render multiple times to ensure Windows paints the fullscreen frame
+        for _ in range(3):
+            cv2.imshow(window_name, loading_frame)
+            cv2.waitKey(50)
         
         terminal_update_counter = 0
         self.keypoint_stabilized = False

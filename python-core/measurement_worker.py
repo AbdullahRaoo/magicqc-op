@@ -105,9 +105,13 @@ def run_headless_measurement():
         # the process gets force-killed after timeout, and the finally block
         # (which releases the camera) NEVER runs — leaving the USB camera locked.
         import signal
+        _stopped_by_signal = False
+
         def _signal_handler(signum, _frame):
+            nonlocal _stopped_by_signal
             sig_name = signal.Signals(signum).name if hasattr(signal, 'Signals') else str(signum)
             print(f"[SIGNAL] Received {sig_name}, requesting graceful stop...")
+            _stopped_by_signal = True
             measurer.should_stop = True
 
         signal.signal(signal.SIGTERM, _signal_handler)
@@ -190,15 +194,28 @@ def run_headless_measurement():
         # No input() pause – there is no visible console in production
         sys.exit(1)
     finally:
-        # ── CRITICAL: Always release camera hardware no matter how we exit ──
-        # Without this, a killed/crashed worker leaves the USB camera device
-        # locked and the next measurement attempt gets "no camera found".
+        # ── Camera release strategy ──
+        # CameraUnInit() causes a USB device reset (disconnect/reconnect sound, 1-3s
+        # re-enumeration). When stopped by signal (normal stop button / side switch),
+        # we SKIP CameraUnInit and let the OS release the handle on process exit.
+        # This avoids the USB reset and makes the camera instantly available.
+        # Only call CameraUnInit on crash/normal exit where we need explicit cleanup.
         if measurer and getattr(measurer, 'camera_obj', None):
-            try:
-                measurer.camera_obj.close()
-                print("[CLEANUP] Camera released successfully")
-            except Exception as e:
-                print(f"[CLEANUP] Camera release error (non-fatal): {e}")
+            if _stopped_by_signal:
+                print("[CLEANUP] Signal stop — skipping CameraUnInit to avoid USB reset")
+                # Just null out the handle so close() is a no-op
+                # The OS will release the USB handle when the process exits
+                try:
+                    measurer.camera_obj.hCamera = 0
+                    measurer.camera_obj.pFrameBuffer = 0
+                except Exception:
+                    pass
+            else:
+                try:
+                    measurer.camera_obj.close()
+                    print("[CLEANUP] Camera released successfully (normal exit)")
+                except Exception as e:
+                    print(f"[CLEANUP] Camera release error (non-fatal): {e}")
         try:
             import cv2 as _cv2
             _cv2.destroyAllWindows()

@@ -476,13 +476,12 @@ def run_api_server():
                 _graceful_stop_worker(measurement_process, 'existing-measurement')
                 measurement_process = None
                 measurement_status['running'] = False
-                # ── USB stabilization delay ──
-                # CameraUnInit() triggers a USB device reset. Without this delay,
-                # the new worker's CameraEnumerateDevice() runs before the USB stack
-                # finishes re-enumerating → "no camera found".
-                print("[API] Waiting 2s for camera USB re-enumeration...")
+                # ── Brief process cleanup delay ──
+                # Previous worker is being terminated. With CameraUnInit skipped on
+                # signal stop, there's no USB reset — just need the process to exit.
+                print("[API] Waiting for previous worker to exit...")
                 import time as _time
-                _time.sleep(2)
+                _time.sleep(0.5)
 
             # Clean stale live_measurements.json to prevent cached data leaking
             for stale_path in [
