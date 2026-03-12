@@ -133,6 +133,8 @@ def run_api_server():
     # ── Helper: gracefully stop a worker process ──
     def _graceful_stop_worker(proc, label='worker', timeout_s=6.0):
         """Terminate a worker process, giving it time to release hardware (camera).
+        On Windows, sends CTRL_BREAK_EVENT first so the worker's SIGBREAK handler
+        can set should_stop and run camera cleanup in the finally block.
         Falls back to kill() if the process doesn't exit within timeout_s seconds.
         """
         if proc is None:
@@ -142,25 +144,49 @@ def run_api_server():
             parent = psutil.Process(pid)
             children = parent.children(recursive=True)
 
-            # Step 1: SIGTERM (terminate) — allows finally blocks to run
-            for child in children:
+            # Step 1 (Windows): Send CTRL_BREAK_EVENT so SIGBREAK handler fires
+            if sys.platform == 'win32':
                 try:
-                    child.terminate()
-                except Exception:
-                    pass
-            parent.terminate()
-            print(f"[STOP] Sent terminate to {label} PID {pid}")
+                    import signal as _sig
+                    os.kill(pid, _sig.CTRL_BREAK_EVENT)
+                    print(f"[STOP] Sent CTRL_BREAK to {label} PID {pid}")
+                except Exception as e:
+                    print(f"[STOP] CTRL_BREAK failed for {label}: {e}")
+
+            # Step 1b: Also signal via a stop file the worker can poll
+            stop_file = os.path.join(STORAGE_ROOT, f'.stop_{pid}')
+            try:
+                with open(stop_file, 'w') as sf:
+                    sf.write('stop')
+            except Exception:
+                pass
 
             # Step 2: Wait for graceful exit (camera cleanup happens here)
             gone, alive = psutil.wait_procs([parent] + children, timeout=timeout_s)
+
+            # Clean up stop file
+            try:
+                os.remove(stop_file)
+            except Exception:
+                pass
+
             if alive:
-                # Step 3: Force-kill anything still running
+                # Step 3: terminate + kill anything still running
                 for p in alive:
+                    try:
+                        p.terminate()
+                    except Exception:
+                        pass
+                gone2, still_alive = psutil.wait_procs(alive, timeout=2.0)
+                for p in still_alive:
                     try:
                         p.kill()
                     except Exception:
                         pass
-                print(f"[STOP] Force-killed {len(alive)} stubborn process(es)")
+                if still_alive:
+                    print(f"[STOP] Force-killed {len(still_alive)} stubborn process(es)")
+                else:
+                    print(f"[STOP] {label} exited after terminate")
             else:
                 print(f"[STOP] {label} exited gracefully")
 
@@ -175,7 +201,10 @@ def run_api_server():
                 pass
 
     app = Flask(__name__)
-    CORS(app)  # Enable CORS for Laravel communication
+    # Restrict CORS to localhost origins only (Electron renderer + dev server)
+    CORS(app, origins=['http://localhost:*', 'http://127.0.0.1:*'])
+    # Prevent OOM from oversized payloads (100 MB cap)
+    app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
 
     # â”€â”€ Configuration â€” all paths anchored to STORAGE_ROOT â”€â”€
     LARAVEL_STORAGE_PATH = os.environ.get('LARAVEL_STORAGE_PATH', os.path.join(STORAGE_ROOT, 'storage'))
@@ -220,17 +249,38 @@ def run_api_server():
         clean_b64 = strip_base64_prefix(image_data_raw)
         return base64.b64decode(clean_b64)
 
+    # ── Import cv2 once at server init for reliability ──
+    # Importing inside request handlers can fail in PyInstaller bundles
+    try:
+        import cv2 as _cv2
+        import numpy as _np
+        print(f"[OK] OpenCV {_cv2.__version__} loaded (imdecode available: {hasattr(_cv2, 'imdecode')})")
+    except ImportError as _cv2_err:
+        _cv2 = None
+        _np = None
+        print(f"[WARN] OpenCV not available: {_cv2_err}")
+
     def verify_image_file(file_path):
         """Verify a written image file is a valid image readable by OpenCV."""
         try:
-            import cv2
-            img = cv2.imread(file_path)
+            if _cv2 is None:
+                return True, 0, 0  # Can't verify without cv2, assume OK
+            img = _cv2.imread(file_path)
             if img is not None:
                 h, w = img.shape[:2]
                 return True, w, h
             return False, 0, 0
         except Exception:
             return False, 0, 0
+
+    def _sanitize_path_component(name):
+        """Sanitize a string for safe use in file paths — prevents directory traversal."""
+        if not name:
+            return 'unknown'
+        # Remove directory traversal sequences and path separators
+        sanitized = str(name).replace('..', '').replace('/', '_').replace('\\', '_')
+        sanitized = sanitized.replace('\0', '').strip('. ')
+        return sanitized or 'unknown'
 
     def ensure_directories():
         """Ensure all required directories exist"""
@@ -426,6 +476,8 @@ def run_api_server():
 
         try:
             data = request.json
+            if not data:
+                return jsonify({'status': 'error', 'message': 'Request body is required'}), 400
             annotation_name = data.get('annotation_name')
             article_style = data.get('article_style')
             side = data.get('side', 'front')
@@ -470,12 +522,13 @@ def run_api_server():
                     'message': 'annotation_name (size) is required'
                 }), 400
 
-            # Stop any existing measurement before starting a new one
-            if measurement_status['running']:
-                print(f"[API] Stopping existing measurement before starting new one...")
-                _graceful_stop_worker(measurement_process, 'existing-measurement')
-                measurement_process = None
-                measurement_status['running'] = False
+            # Stop any existing measurement before starting a new one (thread-safe)
+            with _state_lock:
+                if measurement_status['running']:
+                    print(f"[API] Stopping existing measurement before starting new one...")
+                    _graceful_stop_worker(measurement_process, 'existing-measurement')
+                    measurement_process = None
+                    measurement_status['running'] = False
                 # ── Brief process cleanup delay ──
                 # Previous worker is being terminated. With CameraUnInit skipped on
                 # signal stop, there's no USB reset — just need the process to exit.
@@ -515,18 +568,18 @@ def run_api_server():
                     }
                     ext = ext_map.get(image_mime_type, '.jpg')
 
-                    safe_style = str(article_style).replace('/', '_').replace('\\', '_')
-                    safe_name = str(annotation_name).replace('/', '_').replace('\\', '_')
-                    color_suffix = f"-{color_code}" if color_code else ''
+                    safe_style = _sanitize_path_component(article_style)
+                    safe_name = _sanitize_path_component(annotation_name)
+                    color_suffix = f"-{_sanitize_path_component(color_code)}" if color_code else ''
                     temp_image_path = os.path.join(temp_dir, f"{safe_style}_{safe_name}{color_suffix}{ext}")
 
                     image_bytes = decode_base64_image(image_data)
 
-                    import cv2
-                    import numpy as np
+                    if _cv2 is None or _np is None:
+                        raise RuntimeError('OpenCV (cv2) is not available — cannot process image data')
 
-                    nparr = np.frombuffer(image_bytes, np.uint8)
-                    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                    nparr = _np.frombuffer(image_bytes, _np.uint8)
+                    img = _cv2.imdecode(nparr, _cv2.IMREAD_COLOR)
 
                     if img is not None:
                         actual_h, actual_w = img.shape[:2]
@@ -547,15 +600,15 @@ def run_api_server():
 
                         if actual_w < target_w or actual_h < target_h:
                             print(f"[DB] UPSCALING reference image from {actual_w}x{actual_h} to {target_w}x{target_h}")
-                            img_upscaled = cv2.resize(img, (target_w, target_h), interpolation=cv2.INTER_LANCZOS4)
+                            img_upscaled = _cv2.resize(img, (target_w, target_h), interpolation=_cv2.INTER_LANCZOS4)
 
                             upscaled_h, upscaled_w = img_upscaled.shape[:2]
                             print(f"[DB] Upscaled result: {upscaled_w}x{upscaled_h}")
 
                             if ext in ['.jpg', '.jpeg']:
-                                _, img_encoded = cv2.imencode('.jpg', img_upscaled, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                                _, img_encoded = _cv2.imencode('.jpg', img_upscaled, [_cv2.IMWRITE_JPEG_QUALITY, 95])
                             else:
-                                _, img_encoded = cv2.imencode(ext, img_upscaled)
+                                _, img_encoded = _cv2.imencode(ext, img_upscaled)
 
                             image_bytes = img_encoded.tobytes()
                             print(f"[DB] Upscaled image size: {len(image_bytes)} bytes")
@@ -651,8 +704,8 @@ def run_api_server():
                         'image/gif': '.gif'
                     }
                     ext = ext_map.get(image_mime_type, '.jpg')
-                    safe_p2_style = str(article_style).replace('/', '_').replace('\\', '_')
-                    safe_p2_name = str(annotation_name).replace('/', '_').replace('\\', '_')
+                    safe_p2_style = _sanitize_path_component(article_style)
+                    safe_p2_name = _sanitize_path_component(annotation_name)
                     color_suffix_p2 = f"-{color_code}" if color_code else ''
                     temp_image_path = os.path.join(temp_dir, f"{safe_p2_style}_{safe_p2_name}{color_suffix_p2}{ext}")
 
@@ -1043,23 +1096,24 @@ def run_api_server():
         nonlocal measurement_process, measurement_status
 
         try:
-            if not measurement_status['running']:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'No measurement is running'
-                }), 400
+            with _state_lock:
+                if not measurement_status['running']:
+                    return jsonify({
+                        'status': 'error',
+                        'message': 'No measurement is running'
+                    }), 400
 
-            if measurement_process:
-                _graceful_stop_worker(measurement_process, 'measurement')
-                measurement_process = None
+                if measurement_process:
+                    _graceful_stop_worker(measurement_process, 'measurement')
+                    measurement_process = None
 
-            measurement_status.update({
-                'running': False,
-                'annotation_name': None,
-                'status': 'stopped',
-                'error': None,
-                'start_time': None
-            })
+                measurement_status.update({
+                    'running': False,
+                    'annotation_name': None,
+                    'status': 'stopped',
+                    'error': None,
+                    'start_time': None
+                })
 
             return jsonify({
                 'status': 'success',
@@ -1244,22 +1298,23 @@ def run_api_server():
         """Start camera calibration process"""
         nonlocal calibration_process, calibration_status
 
-        if calibration_status['running']:
-            return jsonify({
-                'status': 'error',
-                'message': 'Calibration is already in progress'
-            }), 409
+        with _state_lock:
+            if calibration_status['running']:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Calibration is already in progress'
+                }), 409
 
-        # Read reference distance from POST body (set by React UI)
-        data = request.get_json(silent=True) or {}
-        reference_length_cm = data.get('reference_length_cm')
-        print(f"[CALIBRATION] Starting with reference_length_cm={reference_length_cm}")
+            # Read reference distance from POST body (set by React UI)
+            data = request.get_json(silent=True) or {}
+            reference_length_cm = data.get('reference_length_cm')
+            print(f"[CALIBRATION] Starting with reference_length_cm={reference_length_cm}")
 
-        calibration_status = {
-            'running': True,
-            'status': 'starting',
-            'error': None
-        }
+            calibration_status = {
+                'running': True,
+                'status': 'starting',
+                'error': None
+            }
 
         def run_calibration():
             nonlocal calibration_process, calibration_status
@@ -1321,17 +1376,18 @@ def run_api_server():
         """Cancel ongoing calibration"""
         nonlocal calibration_process, calibration_status
 
-        if calibration_process:
-            try:
-                calibration_process.terminate()
-            except Exception:
-                pass
+        with _state_lock:
+            if calibration_process:
+                try:
+                    calibration_process.terminate()
+                except Exception:
+                    pass
 
-        calibration_status = {
-            'running': False,
-            'status': 'cancelled',
-            'error': None
-        }
+            calibration_status = {
+                'running': False,
+                'status': 'cancelled',
+                'error': None
+            }
 
         return jsonify({
             'status': 'success',
@@ -1419,11 +1475,12 @@ def run_api_server():
                     'message': f'Invalid size. Must be one of: {", ".join(valid_sizes)}'
                 }), 400
 
-            if registration_status['running']:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Registration is already in progress'
-                }), 400
+            with _state_lock:
+                if registration_status['running']:
+                    return jsonify({
+                        'status': 'error',
+                        'message': 'Registration is already in progress'
+                    }), 400
 
             annotation_dir = os.path.join(ANNOTATIONS_PATH, size)
             if os.path.exists(annotation_dir):
@@ -1522,28 +1579,29 @@ def run_api_server():
         nonlocal registration_process, registration_status
 
         try:
-            if not registration_status['running']:
-                return jsonify({
-                    'status': 'error',
-                    'message': 'No registration is running'
-                }), 400
+            with _state_lock:
+                if not registration_status['running']:
+                    return jsonify({
+                        'status': 'error',
+                        'message': 'No registration is running'
+                    }), 400
 
-            if registration_process:
-                try:
-                    parent = psutil.Process(registration_process.pid)
-                    for child in parent.children(recursive=True):
-                        child.kill()
-                    parent.kill()
-                except Exception:
-                    pass
+                if registration_process:
+                    try:
+                        parent = psutil.Process(registration_process.pid)
+                        for child in parent.children(recursive=True):
+                            child.kill()
+                        parent.kill()
+                    except Exception:
+                        pass
 
-            registration_status = {
-                'running': False,
-                'size': None,
-                'status': 'cancelled',
-                'error': None,
-                'step': 'cancelled'
-            }
+                registration_status = {
+                    'running': False,
+                    'size': None,
+                    'status': 'cancelled',
+                    'error': None,
+                    'step': 'cancelled'
+                }
 
             return jsonify({
                 'status': 'success',
@@ -1563,10 +1621,11 @@ def run_api_server():
     import atexit
     def _cleanup_on_exit():
         nonlocal measurement_process
-        if measurement_process:
-            print("[SHUTDOWN] Cleaning up measurement worker before exit...")
-            _graceful_stop_worker(measurement_process, 'shutdown-cleanup', timeout_s=2.0)
-            measurement_process = None
+        with _state_lock:
+            if measurement_process:
+                print("[SHUTDOWN] Cleaning up measurement worker before exit...")
+                _graceful_stop_worker(measurement_process, 'shutdown-cleanup', timeout_s=2.0)
+                measurement_process = None
     atexit.register(_cleanup_on_exit)
 
     print("=" * 60)

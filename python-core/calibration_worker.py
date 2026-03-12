@@ -15,12 +15,29 @@ import math
 import time
 from datetime import datetime
 
-# Import camera SDK
-from mvsdk import *
+# Import camera SDK (guard against missing DLL in environments without the camera hardware)
+try:
+    from mvsdk import *
+except (ImportError, OSError) as _mvsdk_err:
+    print(f"[WARN] MindVision SDK not available: {_mvsdk_err}")
+    # Define a minimal stub so the module can still be imported for testing
+    CAMERA_MEDIA_TYPE_MONO8 = 0
 
 # Frozen-safe PROJECT_ROOT (same logic as core_main.py)
 if getattr(sys, 'frozen', False):
-    _PROJECT_ROOT = os.path.dirname(sys.executable)
+    _exe_path = os.path.abspath(sys.executable)
+    _exe_dir = os.path.dirname(_exe_path)
+    # Handle nested dist/ layout in frozen mode
+    if os.path.basename(_exe_dir) == 'dist':
+        _parent = os.path.dirname(_exe_dir)
+        if os.path.basename(_parent) == 'python-core':
+            _PROJECT_ROOT = os.path.dirname(_parent)
+        else:
+            _PROJECT_ROOT = _parent
+    elif os.path.basename(_exe_dir) == 'python-core':
+        _PROJECT_ROOT = os.path.dirname(_exe_dir)
+    else:
+        _PROJECT_ROOT = _exe_dir
 else:
     _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -66,35 +83,59 @@ class CameraCalibrator:
             self.pFrameBuffer = 0
 
         def open(self):
+            hCamera = 0
+            pFrameBuffer = 0
             try:
-                self.hCamera = CameraInit(self.DevInfo, -1, -1)
-                cap = CameraGetCapability(self.hCamera)
+                hCamera = CameraInit(self.DevInfo, -1, -1)
+                cap = CameraGetCapability(hCamera)
 
                 # Force MONO8 output for consistent grayscale
-                CameraSetIspOutFormat(self.hCamera, CAMERA_MEDIA_TYPE_MONO8)
+                CameraSetIspOutFormat(hCamera, CAMERA_MEDIA_TYPE_MONO8)
 
                 # Get resolution
                 width = cap.sResolutionRange.iWidthMax
                 height = cap.sResolutionRange.iHeightMax
-                self.pFrameBuffer = CameraAlignMalloc(width * height * 3, 16)
+                pFrameBuffer = CameraAlignMalloc(width * height * 3, 16)
 
                 # Set exposure
-                CameraSetAeState(self.hCamera, 0)  # Disable auto-exposure
-                CameraSetExposureTime(self.hCamera, 20000)  # 20ms exposure
+                CameraSetAeState(hCamera, 0)  # Disable auto-exposure
+                CameraSetExposureTime(hCamera, 20000)  # 20ms exposure
 
-                CameraPlay(self.hCamera)
+                CameraPlay(hCamera)
                 print(f"[OK] Camera opened: {width}x{height}")
+
+                self.hCamera = hCamera
+                self.cap = cap
+                self.pFrameBuffer = pFrameBuffer
                 return True
             except CameraException as e:
                 print(f"[ERR] Camera open failed: {e}")
+                # Clean up partially-initialised resources to prevent handle leak
+                if hCamera > 0:
+                    try:
+                        CameraUnInit(hCamera)
+                    except Exception:
+                        pass
+                if pFrameBuffer != 0:
+                    try:
+                        CameraAlignFree(pFrameBuffer)
+                    except Exception:
+                        pass
                 return False
 
         def close(self):
-            if self.hCamera > 0:
-                CameraUnInit(self.hCamera)
-                CameraAlignFree(self.pFrameBuffer)
-                self.hCamera = 0
-                self.pFrameBuffer = 0
+            try:
+                if self.hCamera > 0:
+                    CameraUnInit(self.hCamera)
+                    self.hCamera = 0
+            finally:
+                # Always free buffer even if CameraUnInit raises
+                if self.pFrameBuffer != 0:
+                    try:
+                        CameraAlignFree(self.pFrameBuffer)
+                    except Exception:
+                        pass
+                    self.pFrameBuffer = 0
 
         def grab(self):
             try:
@@ -476,9 +517,10 @@ class CameraCalibrator:
 
         while True:
             cv2.imshow(window_name, image_copy)
-            key = cv2.waitKey(1) & 0xFF
+            key = cv2.waitKeyEx(1)  # waitKeyEx returns full key code for arrow key support on Windows
+            key_low = key & 0xFF   # ASCII portion for letter keys
 
-            if key == ord('s') or key == ord('S'):
+            if key_low == ord('s') or key_low == ord('S'):
                 if len(cal_points) == 2:
                     # Calculate pixel distance
                     pixel_distance = math.sqrt((cal_points[1][0] - cal_points[0][0]) ** 2 +
@@ -527,22 +569,22 @@ class CameraCalibrator:
                 else:
                     print("[ERR] Please mark exactly 2 points first!")
 
-            elif key == ord('c') or key == ord('C'):
+            elif key_low == ord('c') or key_low == ord('C'):
                 cal_points = []
                 redraw()
                 print("[*] Points cleared.")
 
-            elif key == ord('z') or key == ord('Z'):
+            elif key_low == ord('z') or key_low == ord('Z'):
                 self.zoom_factor = min(5.0, self.zoom_factor * 1.2)
                 redraw()
                 print(f"Zoom: {self.zoom_factor:.1f}x")
 
-            elif key == ord('x') or key == ord('X'):
+            elif key_low == ord('x') or key_low == ord('X'):
                 self.zoom_factor = max(1.0, self.zoom_factor / 1.2)
                 redraw()
                 print(f"Zoom: {self.zoom_factor:.1f}x")
 
-            elif key == ord('r') or key == ord('R'):
+            elif key_low == ord('r') or key_low == ord('R'):
                 self.zoom_factor = 1.0
                 self.zoom_center = None
                 self.pan_x = 0
@@ -550,23 +592,25 @@ class CameraCalibrator:
                 redraw()
                 print("Zoom reset")
 
-            elif key == 81:  # Left arrow
+            # Arrow keys: waitKeyEx returns 0x250000 (left), 0x260000 (up), 0x270000 (right), 0x280000 (down) on Windows
+            # On Linux GTK they are 81-84.  Accept both.
+            elif key == 0x250000 or key == 81:  # Left arrow
                 self.pan_x -= 50
                 redraw()
-            elif key == 83:  # Right arrow
+            elif key == 0x270000 or key == 83:  # Right arrow
                 self.pan_x += 50
                 redraw()
-            elif key == 82:  # Up arrow
+            elif key == 0x260000 or key == 82:  # Up arrow
                 self.pan_y -= 50
                 redraw()
-            elif key == 84:  # Down arrow
+            elif key == 0x280000 or key == 84:  # Down arrow
                 self.pan_y += 50
                 redraw()
 
-            elif key == ord('h') or key == ord('H'):
+            elif key_low == ord('h') or key_low == ord('H'):
                 self.show_calibration_instructions(image_copy, window_name)
 
-            elif key == ord('q') or key == ord('Q'):
+            elif key_low == ord('q') or key_low == ord('Q'):
                 print("[*] Calibration cancelled by user.")
                 break
 

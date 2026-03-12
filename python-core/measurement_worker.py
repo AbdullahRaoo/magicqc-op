@@ -168,11 +168,22 @@ def run_headless_measurement():
         measurer.load_reference_image()
 
         # If back annotation exists, load it too (for side switching)
-        back_annotation_path = annotation_json_path.replace('_front', '_back') if annotation_json_path else None
+        # Only replace _front→_back in the FILENAME, not the entire path (avoids breaking
+        # paths that contain _front in directory names)
+        def _derive_back_path(front_path):
+            if not front_path:
+                return None
+            d, fname = os.path.split(front_path)
+            back_fname = fname.replace('_front', '_back')
+            if back_fname == fname:
+                return None  # no _front in filename — cannot derive back path
+            return os.path.join(d, back_fname)
+
+        back_annotation_path = _derive_back_path(annotation_json_path)
         if back_annotation_path and os.path.exists(back_annotation_path):
             measurer.back_annotation_file = back_annotation_path
             measurer.load_back_annotation()
-            back_ref_path = reference_image_path.replace('_front', '_back') if reference_image_path else None
+            back_ref_path = _derive_back_path(reference_image_path)
             if back_ref_path and os.path.exists(back_ref_path):
                 measurer.back_reference_image_file = back_ref_path
                 measurer.load_back_reference_image()

@@ -365,29 +365,33 @@ export function ArticlesList() {
               const isBackSide = currentMeasurementSideRef.current === 'back'
 
               if (isBackSide) {
-                // ── BACK SIDE: Sequential assignment to selected empty rows ──
-                // Ignore spec_id/spec_code (may be front-side indexing).
-                // Extract all numeric values, then fill selected+empty slots in visual order.
-                const incomingValues: number[] = []
-                for (const entry of liveData) {
-                  const num = extractNumericValue(entry)
-                  if (num !== null) incomingValues.push(num)
-                }
-                console.log('[POLLING-BACK] Extracted', incomingValues.length, 'numeric values from', liveData.length, 'entries')
+                // ── BACK SIDE: spec_id/spec_code matching (same as front side) ──
+                // save_live_measurements produces spec-aligned output for both sides,
+                // so we match by spec_id/spec_code to avoid positional mismatch
+                // when some keypoint pairs are undetected.
+                liveData.forEach((entry) => {
+                  const liveMeasurement = entry as { spec_id?: number; spec_code?: string; actual_cm?: number;[k: string]: unknown }
+                  let spec: typeof measurementSpecs[0] | undefined
 
-                let valIdx = 0
-                for (const spec of measurementSpecs) {
-                  if (valIdx >= incomingValues.length) break
-                  // Must be selected
-                  if (!selectedMeasurementIdsRef.current.has(spec.id)) continue
-                  // Must be currently empty
-                  if (newValues[spec.id] && newValues[spec.id] !== '') continue
-                  const newValue = incomingValues[valIdx].toFixed(2)
-                  console.log(`[POLLING-BACK] Slot ${valIdx}: ${spec.code} "${spec.measurement}" (id=${spec.id}) <- ${newValue} cm`)
-                  newValues[spec.id] = newValue
-                  updated = true
-                  valIdx++
-                }
+                  if (liveMeasurement.spec_id) {
+                    spec = measurementSpecs.find(s => s.id === liveMeasurement.spec_id)
+                  }
+                  if (!spec && liveMeasurement.spec_code) {
+                    spec = measurementSpecs.find(s => s.code === liveMeasurement.spec_code)
+                  }
+
+                  if (spec) {
+                    if (!selectedMeasurementIdsRef.current.has(spec.id)) return
+                    const numVal = extractNumericValue(entry)
+                    if (numVal === null) return
+                    const newValue = numVal.toFixed(2)
+                    if (newValues[spec.id] !== newValue) {
+                      console.log(`[POLLING-BACK] ${spec.code} "${spec.measurement}" (id=${spec.id}): ${prev[spec.id] || 'empty'} -> ${newValue} cm`)
+                      newValues[spec.id] = newValue
+                      updated = true
+                    }
+                  }
+                })
               } else {
                 // ── FRONT SIDE: Match by spec_id / spec_code ──
                 liveData.forEach((entry) => {
@@ -1044,42 +1048,26 @@ export function ArticlesList() {
 
         // Update measured values with final readings — ONLY for selected (checked) POMs
         // liveMeasurement.id is 1-based index (1,2,3...), map to measurementSpecs array
-        setMeasuredValues(prev => {
-          const newValues = { ...prev }
-          liveData.forEach((liveMeasurement) => {
-            // Live measurement ID is 1-based, so index = id - 1
-            const specIndex = liveMeasurement.id - 1
-            if (specIndex >= 0 && specIndex < measurementSpecs.length) {
-              const spec = measurementSpecs[specIndex]
-              if (!selectedMeasurementIds.has(spec.id)) return // STRICT: skip unchecked
-              newValues[spec.id] = liveMeasurement.actual_cm.toFixed(2)
-              console.log(`[COMPLETE] Spec[${specIndex}] "${spec.code}" (DB id=${spec.id}): ${liveMeasurement.actual_cm.toFixed(2)} cm`)
-            } else {
-              console.warn(`[COMPLETE] No spec at index ${specIndex} for live measurement id ${liveMeasurement.id}`)
-            }
-          })
-          return newValues
+        // Build the new values map HERE so we can compute QC from it (avoids stale closure)
+        const updatedValues: Record<number, string> = { ...measuredValues }
+        liveData.forEach((liveMeasurement) => {
+          // Live measurement ID is 1-based, so index = id - 1
+          const specIndex = liveMeasurement.id - 1
+          if (specIndex >= 0 && specIndex < measurementSpecs.length) {
+            const spec = measurementSpecs[specIndex]
+            if (!selectedMeasurementIds.has(spec.id)) return // STRICT: skip unchecked
+            updatedValues[spec.id] = liveMeasurement.actual_cm.toFixed(2)
+            console.log(`[COMPLETE] Spec[${specIndex}] "${spec.code}" (DB id=${spec.id}): ${liveMeasurement.actual_cm.toFixed(2)} cm`)
+          } else {
+            console.warn(`[COMPLETE] No spec at index ${specIndex} for live measurement id ${liveMeasurement.id}`)
+          }
         })
-      }
+        setMeasuredValues(updatedValues)
 
-      // Stop the camera system
-      await window.measurement.stop()
-      setIsPollingActive(false)
-
-      // Mark measurement as complete (allows editing and shows status)
-      setMeasurementComplete(true)
-      setIsMeasurementEnabled(false)
-      setIsShiftLocked(false)
-
-      // Final save with all current values
-      await saveMeasurements()
-
-      // Calculate QC result after a brief delay to ensure state is updated
-      setTimeout(() => {
+        // ── Compute QC result immediately from updatedValues (not stale closure) ──
         const failed: { code: string, measurement: string, expected: number, actual: number }[] = []
-
         measurementSpecs.forEach(spec => {
-          const valueStr = measuredValues[spec.id]
+          const valueStr = updatedValues[spec.id]
           if (!valueStr) return
 
           const value = parseFloat(valueStr)
@@ -1108,7 +1096,19 @@ export function ArticlesList() {
         setFailedMeasurements(failed)
         setQcPassed(failed.length === 0)
         setShowQCResult(true)
-      }, 100)
+      }
+
+      // Stop the camera system
+      await window.measurement.stop()
+      setIsPollingActive(false)
+
+      // Mark measurement as complete (allows editing and shows status)
+      setMeasurementComplete(true)
+      setIsMeasurementEnabled(false)
+      setIsShiftLocked(false)
+
+      // Final save with all current values
+      await saveMeasurements()
 
       console.log('[COMPLETE] Measurement completed and saved')
       setError(null)

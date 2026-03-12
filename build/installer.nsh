@@ -25,7 +25,7 @@
   ; ── Round 3: Catch orphaned Python processes ────────────────
   ; If magicqc_core.exe was spawned and then the parent crashed,
   ; the child may be orphaned. Use WMIC as a secondary sweep.
-  nsExec::ExecToLog 'wmic process where "name=$$"magicqc_core.exe$$"" call terminate'
+  nsExec::ExecToLog 'wmic process where "name=$\'magicqc_core.exe$\'" call terminate'
 
   ; ── Wait for OS to fully release device handles ─────────────
   ; Camera USB handles (MVCAMSDK_X64.dll) need time to be freed
@@ -36,9 +36,9 @@
   nsExec::ExecToStack 'tasklist /FI "IMAGENAME eq magicqc_core.exe" /NH'
   Pop $0
   Pop $1
-  ; $1 contains tasklist output — if it says "magicqc_core.exe", force-kill again
-  StrCpy $2 $1 18 ; first 18 chars
-  ${If} $2 == "magicqc_core.exe"
+  ; $0 is the exit code from tasklist (0 = found, 1 = not found)
+  ; If exit code is 0, process is still running
+  ${If} $0 == 0
     DetailPrint "Process still running — force-killing again..."
     nsExec::ExecToLog 'taskkill /F /IM "magicqc_core.exe" /T'
     Sleep 2000

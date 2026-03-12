@@ -79,7 +79,7 @@ class LiveKeypointDistanceMeasurer:
         self.good_match_ratio = 0.75
         
         # QC Parameters
-        self.qc_tolerance_cm = 100.0
+        self.qc_tolerance_cm = 1.0  # sensible default — was 100.0 which accepts everything
         self.target_distances = {}
         self.back_target_distances = {}
         self.qc_results = {}
@@ -213,6 +213,7 @@ class LiveKeypointDistanceMeasurer:
                 else:
                     print("❌ Failed to save back reference image")
                     return False
+            return False
         except Exception as e:
             print(f"❌ Error saving back reference image: {e}")
             return False
@@ -684,25 +685,40 @@ class LiveKeypointDistanceMeasurer:
                 return True
                 
             hCamera = 0
+            pFrameBuffer = 0
             try:
                 hCamera = CameraInit(self.DevInfo, -1, -1)
             except CameraException as e:
                 print("CameraInit Failed({}): {}".format(e.error_code, e.message))
                 return False
             
-            cap = CameraGetCapability(hCamera)
-            monoCamera = (cap.sIspCapacity.bMonoSensor != 0)
-            
-            # Force mono output for faster processing
-            CameraSetIspOutFormat(hCamera, CAMERA_MEDIA_TYPE_MONO8)
-            
-            FrameBufferSize = cap.sResolutionRange.iWidthMax * cap.sResolutionRange.iHeightMax * 1
-            pFrameBuffer = CameraAlignMalloc(FrameBufferSize, 16)
-            
-            CameraSetTriggerMode(hCamera, 0)
-            CameraSetAeState(hCamera, 1)  # Default Auto Exposure ON (will be changed by garment color)
-            CameraSetAnalogGain(hCamera, 64)  # Default gain (will be changed by garment color)
-            CameraPlay(hCamera)
+            try:
+                cap = CameraGetCapability(hCamera)
+                monoCamera = (cap.sIspCapacity.bMonoSensor != 0)
+                
+                # Force mono output for faster processing
+                CameraSetIspOutFormat(hCamera, CAMERA_MEDIA_TYPE_MONO8)
+                
+                FrameBufferSize = cap.sResolutionRange.iWidthMax * cap.sResolutionRange.iHeightMax * 1
+                pFrameBuffer = CameraAlignMalloc(FrameBufferSize, 16)
+                
+                CameraSetTriggerMode(hCamera, 0)
+                CameraSetAeState(hCamera, 1)  # Default Auto Exposure ON (will be changed by garment color)
+                CameraSetAnalogGain(hCamera, 64)  # Default gain (will be changed by garment color)
+                CameraPlay(hCamera)
+            except Exception as e:
+                # Clean up partially-initialised resources to prevent handle leak
+                print(f"Camera open partial failure: {e}")
+                try:
+                    CameraUnInit(hCamera)
+                except Exception:
+                    pass
+                if pFrameBuffer != 0:
+                    try:
+                        CameraAlignFree(pFrameBuffer)
+                    except Exception:
+                        pass
+                return False
             
             self.hCamera = hCamera
             self.pFrameBuffer = pFrameBuffer
@@ -713,12 +729,18 @@ class LiveKeypointDistanceMeasurer:
             return True
         
         def close(self):
-            if self.hCamera > 0:
-                CameraUnInit(self.hCamera)
-                self.hCamera = 0
-            if self.pFrameBuffer != 0:
-                CameraAlignFree(self.pFrameBuffer)
-                self.pFrameBuffer = 0
+            try:
+                if self.hCamera > 0:
+                    CameraUnInit(self.hCamera)
+                    self.hCamera = 0
+            finally:
+                # Always free buffer, even if CameraUnInit raises
+                if self.pFrameBuffer != 0:
+                    try:
+                        CameraAlignFree(self.pFrameBuffer)
+                    except Exception:
+                        pass
+                    self.pFrameBuffer = 0
         
         def grab(self):
             hCamera = self.hCamera
@@ -2629,7 +2651,15 @@ class LiveKeypointDistanceMeasurer:
         """Save current live measurements to JSON file for Operator Panel UI access.
         Uses RESULTS_PATH when set by worker so API and worker read/write the same file.
         Merges self.last_measurements before fallback so valid values are never overwritten by 0.0.
-        CRITICAL: results_path must be absolute (set by measurement_worker from config) to avoid CWD issues."""
+        CRITICAL: results_path must be absolute (set by measurement_worker from config) to avoid CWD issues.
+        Throttled to max ~5 writes/sec — UI polls at 500ms so faster writes are wasted I/O."""
+        # ── Write throttle: skip if last write was <200ms ago ──
+        now = time.time()
+        last_write = getattr(self, '_last_save_time', 0.0)
+        if now - last_write < 0.2:
+            return True  # skip but report success — data will be written on next unthrottled call
+        self._last_save_time = now
+
         try:
             # Use config results_path (RESULTS_PATH) when set by measurement_worker for API alignment
             # CRITICAL: Ensure absolute path - worker sets this from config which uses os.path.abspath(RESULTS_PATH)
@@ -3114,7 +3144,7 @@ class LiveKeypointDistanceMeasurer:
             
             cv2.imshow(window_name, display_frame)
             
-            key = cv2.waitKey(8) & 0xFF  # ~120fps cap: yields CPU between frames, prevents 100% core peg
+            key = cv2.waitKeyEx(8)  # waitKeyEx returns full key code including arrow keys on Windows
             
             # ── Re-check after waitKey (close events are processed during waitKey) ──
             if getattr(self, 'should_stop', False):
@@ -3128,15 +3158,16 @@ class LiveKeypointDistanceMeasurer:
                 print("[WINDOW] Window destroyed during waitKey, exiting")
                 break
             
-            if key == ord('q') or key == ord('Q'):
+            key_low = key & 0xFF  # ASCII portion for letter keys
+            if key_low == ord('q') or key_low == ord('Q'):
                 break
-            elif key == ord('p') or key == ord('P'):
+            elif key_low == ord('p') or key_low == ord('P'):
                 self.paused = not self.paused
                 if self.paused:
                     print("⏸️ Measurement PAUSED - Press P to resume")
                 else:
                     print("▶️ Measurement RESUMED")
-            elif key == ord('y') or key == ord('Y'):
+            elif key_low == ord('y') or key_low == ord('Y'):
                 # Toggle perpendicular points static/adaptive mode
                 if self.perpendicular_points_initialized:
                     perpendicular_static_mode = not perpendicular_static_mode
@@ -3148,7 +3179,7 @@ class LiveKeypointDistanceMeasurer:
                                 self.transferred_keypoints[idx] = static_pt.copy()
                     else:
                         print("📏 Perpendicular points now ADAPTIVE (will move with garment)")
-            elif key == ord('b') or key == ord('B'):
+            elif key_low == ord('b') or key_low == ord('B'):
                 if self.current_side == 'front':
                     if self.switch_to_back_side():
                         print("🔄 Switched to BACK side")
@@ -3161,28 +3192,30 @@ class LiveKeypointDistanceMeasurer:
                         self.perpendicular_points_initialized = False
                     else:
                         print("❌ Failed to switch to front side - no front annotation found")
-            elif key == ord('z') or key == ord('Z'):
+            elif key_low == ord('z') or key_low == ord('Z'):
                 self.zoom_factor *= 1.2
                 print(f"Zoom: {self.zoom_factor:.1f}x")
-            elif key == ord('x') or key == ord('X'):
+            elif key_low == ord('x') or key_low == ord('X'):
                 self.zoom_factor = max(1.0, self.zoom_factor / 1.2)
                 print(f"Zoom: {self.zoom_factor:.1f}x")
-            elif key == ord('r') or key == ord('R'):
+            elif key_low == ord('r') or key_low == ord('R'):
                 self.zoom_factor = 1.0
                 self.zoom_center = None
                 self.pan_x = 0
                 self.pan_y = 0
                 print("Zoom reset")
-            elif key == 81:
+            # Arrow keys: waitKeyEx returns 0x250000 (left), 0x260000 (up), 0x270000 (right), 0x280000 (down) on Windows
+            # On Linux GTK they are 81-84.  Accept both.
+            elif key == 0x250000 or key == 81:  # Left arrow
                 self.pan_x -= 20
                 print(f"Pan left: {self.pan_x}")
-            elif key == 83:
+            elif key == 0x270000 or key == 83:  # Right arrow
                 self.pan_x += 20
                 print(f"Pan right: {self.pan_x}")
-            elif key == 82:
+            elif key == 0x260000 or key == 82:  # Up arrow
                 self.pan_y -= 20
                 print(f"Pan up: {self.pan_y}")
-            elif key == 84:
+            elif key == 0x280000 or key == 84:  # Down arrow
                 self.pan_y += 20
                 print(f"Pan down: {self.pan_y}")
         

@@ -34,7 +34,7 @@ const OBFUSCATOR_OPTIONS = {
     stringArrayThreshold: 0.75,
     splitStrings: true,
     splitStringsChunkLength: 8,
-    transformObjectKeys: true,
+    transformObjectKeys: false,     // MUST be false — renaming keys breaks Electron IPC, Node APIs, etc.
     unicodeEscapeSequence: false,   // Keeps file size reasonable
 }
 

@@ -1,7 +1,7 @@
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { Login } from './components/Login'
 import { ArticlesList } from './components/ArticlesList'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './App.css'
 
 function AppContent() {
@@ -21,8 +21,21 @@ function AppContent() {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
 
+  // Ref for calibration polling - cleaned up on unmount to prevent leaks
+  const calibrationPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const calibrationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Cleanup calibration polling on unmount
+  useEffect(() => {
+    return () => {
+      if (calibrationPollRef.current) clearInterval(calibrationPollRef.current)
+      if (calibrationTimeoutRef.current) clearTimeout(calibrationTimeoutRef.current)
+    }
+  }, [])
+
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const saved = localStorage.getItem('theme')
+
     return saved === 'dark'
   })
 
@@ -67,19 +80,23 @@ function AppContent() {
       const result = await window.measurement.startCalibration(distanceValue ? parseFloat(distanceValue) : undefined)
       if (result.status === 'success') {
         console.log('[CALIBRATION] Calibration window opened')
+        // Clear any previous polling
+        if (calibrationPollRef.current) clearInterval(calibrationPollRef.current)
+        if (calibrationTimeoutRef.current) clearTimeout(calibrationTimeoutRef.current)
         // Poll for completion
-        const pollInterval = setInterval(async () => {
+        calibrationPollRef.current = setInterval(async () => {
           const statusResult = await window.measurement.getCalibrationStatus()
           if (statusResult.status === 'success' && statusResult.data?.calibrated && !statusResult.data?.running) {
             console.log('[CALIBRATION] Calibration completed!')
             setIsCalibrating(false)
             setCalibrationStep('success')
-            clearInterval(pollInterval)
+            if (calibrationPollRef.current) clearInterval(calibrationPollRef.current)
+            if (calibrationTimeoutRef.current) clearTimeout(calibrationTimeoutRef.current)
           }
         }, 2000)
         // Stop polling after 5 minutes (timeout)
-        setTimeout(() => {
-          clearInterval(pollInterval)
+        calibrationTimeoutRef.current = setTimeout(() => {
+          if (calibrationPollRef.current) clearInterval(calibrationPollRef.current)
           setIsCalibrating(false)
         }, 300000)
       } else {
