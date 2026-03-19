@@ -3,7 +3,7 @@
 ## 1. Project Overview
 
 **MagicQC Operator Panel** is an enterprise-grade Quality Control (QC) desktop application for garment measurement using high-resolution computer vision.
-* **Current Version:** `1.5.1`
+* **Current Version:** `1.5.2`
 * **Purpose:** Provides a dual-screen operator experience where the main screen (Operator Panel) manages work orders, annotations, and measurement specifications, while a secondary screen displays the live high-resolution camera feed from a MindVision camera for real-time keypoint extraction and garment measurement.
 
 ## 2. Technology Stack & Architecture

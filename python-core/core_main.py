@@ -237,6 +237,7 @@ def run_api_server():
         'error': None,
         'start_time': None
     }
+    _state_lock = threading.Lock()
 
     def strip_base64_prefix(data):
         """Strip data URL prefix from base64 string."""
