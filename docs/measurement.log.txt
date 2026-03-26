@@ -1,0 +1,560 @@
+2026-02-26 20:57:23 [INFO] ============================================================
+2026-02-26 20:57:23 [INFO] Logger initialised  -  measurement  ->  C:\Users\ASAD\AppData\Roaming\operatorpannel\logs\measurement.log
+2026-02-26 20:57:23 [INFO] ============================================================
+2026-02-26 20:57:23 [INFO] [START] Worker for article: KES, size: S (front)
+2026-02-26 20:57:23 [INFO] [PATH] Annotation JSON: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.json
+2026-02-26 20:57:23 [INFO] [PATH] Reference Image: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.jpg
+2026-02-26 20:57:23 [INFO] [PATH] Results: C:\Users\ASAD\AppData\Roaming\operatorpannel\storage\measurement_results
+2026-02-26 20:57:23 [INFO] [MODE] Garment Color: other
+2026-02-26 20:57:23 [INFO] [SPECS] Received 13 measurement specs from UI:
+2026-02-26 20:57:23 [INFO]   Pair 1 -> J1: Overarm crown to cuff (expected: 20 cm, db_id: 85)
+2026-02-26 20:57:23 [INFO]   Pair 2 -> A1: Chest width 2.5cm below underarm (expected: 48 cm, db_id: 93)
+2026-02-26 20:57:23 [INFO]   Pair 3 -> B1: CB length excl neckband (expected: 62 cm, db_id: 94)
+2026-02-26 20:57:23 [INFO]   Pair 4 -> L1: Cuff width (expected: 17.5 cm, db_id: 95)
+2026-02-26 20:57:23 [INFO]   Pair 5 -> D2: Hem width (expected: 48 cm, db_id: 96)
+2026-02-26 20:57:23 [INFO]   Pair 6 -> F2: Back neck width seam to seam (expected: 18 cm, db_id: 97)
+2026-02-26 20:57:23 [INFO]   Pair 7 -> G1: Shoulder Length (expected: 16.5 cm, db_id: 98)
+2026-02-26 20:57:23 [INFO]   Pair 8 -> H1: Bicep width - 2.5cm from armhole (expected: 19.25 cm, db_id: 99)
+2026-02-26 20:57:23 [INFO]   Pair 9 -> E2: CB collar depth (expected: 7 cm, db_id: 100)
+2026-02-26 20:57:23 [INFO]   Pair 10 -> E3: Collar point depth (expected: 6 cm, db_id: 101)
+2026-02-26 20:57:23 [INFO]   Pair 11 -> P2: Planket width (expected: 3 cm, db_id: 102)
+2026-02-26 20:57:23 [INFO]   Pair 12 -> P3: Planket length (expected: 12 cm, db_id: 103)
+2026-02-26 20:57:23 [INFO]   Pair 13 -> O3: Half neck (expected: 22.25 cm, db_id: 104)
+2026-02-26 20:57:23 [INFO] [CHECK] Reference image: 1340724 bytes, header(hex): ffd8ffe000104a464946000101000001
+2026-02-26 20:57:23 [INFO] [CHECK] Valid JPEG header detected
+2026-02-26 20:57:23 [INFO] [API] Garment color set to: other
+2026-02-26 20:57:23 [INFO] [LIVE] Will write live_measurements.json to: C:\Users\ASAD\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json
+2026-02-26 20:57:24 [INFO] Found 1 camera(s)
+2026-02-26 20:57:24 [INFO] Camera opened successfully: Camera MV-SUA2000C#0001-0019
+2026-02-26 20:57:24 [INFO] 📷 Camera mode: MONOCHROME (for faster processing)
+2026-02-26 20:57:24 [INFO] Camera initialized successfully
+2026-02-26 20:57:24 [INFO] [HEADLESS] Skipping interactive garment color prompt
+2026-02-26 20:57:24 [INFO] 🎛️ Camera configured: Gain 64, Auto Exposure ON (OTHER colors mode)
+2026-02-26 20:57:24 [INFO] ✅ Calibration loaded successfully!
+2026-02-26 20:57:24 [INFO] 📏 Scale factor: 30.44 pixels/cm
+2026-02-26 20:57:24 [INFO] 📐 Reference length: 29.8 cm
+2026-02-26 20:57:24 [INFO] [LOAD] Using annotation file: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.json
+2026-02-26 20:57:24 [INFO] [LOAD] Using reference image: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.jpg
+2026-02-26 20:57:24 [INFO] [FILE] Reference image size: 1340724 bytes
+2026-02-26 20:57:24 [INFO] [COMPAT] Applied legacy type inference: 10 corner, 0 perp, 0 normal
+2026-02-26 20:57:24 [INFO] ✅ Annotation data loaded successfully!
+2026-02-26 20:57:24 [INFO] 📍 Loaded 10 keypoints:
+2026-02-26 20:57:24 [INFO]    - Corner: 10
+2026-02-26 20:57:24 [INFO]    - Perpendicular: 0
+2026-02-26 20:57:24 [INFO]    - Normal: 0
+2026-02-26 20:57:24 [INFO] 🎯 Loaded 5 target distances
+2026-02-26 20:57:24 [INFO] 📦 Loaded placement guide box
+2026-02-26 20:57:24 [INFO] ✅ Reference image loaded: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.jpg
+2026-02-26 20:57:24 [INFO] 📐 Image dimensions: 5456x2700
+2026-02-26 20:57:24 [INFO] ✅ Reference image loaded: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.jpg
+2026-02-26 20:57:24 [INFO] 📐 Image dimensions: 5456x2700
+2026-02-26 20:57:24 [INFO] [COMPAT] Applied legacy type inference (back): 10 corner, 0 perp, 0 normal
+2026-02-26 20:57:24 [INFO] ✅ Back annotation data loaded successfully!
+2026-02-26 20:57:24 [INFO] 📍 Loaded 10 back keypoints:
+2026-02-26 20:57:24 [INFO]    - Corner: 10
+2026-02-26 20:57:24 [INFO]    - Perpendicular: 0
+2026-02-26 20:57:24 [INFO]    - Normal: 0
+2026-02-26 20:57:24 [INFO] 🎯 Loaded 5 back target distances
+2026-02-26 20:57:24 [INFO] 📦 Loaded back placement_box: [1298, 231, 3852, 2257]
+2026-02-26 20:57:24 [INFO] 📁 No back reference image file found
+2026-02-26 20:57:24 [INFO] ❌ Back annotation loaded but reference image missing
+2026-02-26 20:57:25 [INFO] ✅ Back reference image loaded: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.jpg
+2026-02-26 20:57:25 [INFO] 📐 Image dimensions: 5456x2700
+2026-02-26 20:57:25 [INFO] [LIVE] Starting measurement loop (HEADLESS MODE, FULLSCREEN)...
+2026-02-26 20:57:25 [INFO] 
+2026-02-26 20:57:25 [INFO] ============================================================
+2026-02-26 20:57:25 [INFO] STEP 3: LIVE MEASUREMENT - ROBUST KEYPOINT TRACKING
+2026-02-26 20:57:25 [INFO] ============================================================
+2026-02-26 20:57:25 [INFO] Keypoints will now adapt based on their type:
+2026-02-26 20:57:25 [INFO]   CORNER points: Enhanced detection (template + Shi-Tomasi + Harris)
+2026-02-26 20:57:25 [INFO]   PERPENDICULAR points: Static after first successful match
+2026-02-26 20:57:25 [INFO]   NORMAL points: Basic feature matching
+2026-02-26 20:57:25 [INFO] PAUSE FUNCTION + MOUSE PAN/ZOOM!
+2026-02-26 20:57:25 [INFO] B KEY: Switch between FRONT and BACK sides!
+2026-02-26 20:57:25 [INFO] 🎛️ Gain set to 64, Auto Exposure ON for OTHER colors (live measurement)
+2026-02-26 20:57:25 [INFO] [HEADLESS] Starting live measurement automatically...
+2026-02-26 20:57:25 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:57:25 [INFO] [PATH] Authoritative results path: C:\Users\ASAD\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json
+2026-02-26 20:57:25 [INFO] [LIVE] Write path: C:\Users\ASAD\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json | side=front
+2026-02-26 20:57:25 [INFO]   pair_num=1 actual_cm=None spec_code=J1 source=never
+2026-02-26 20:57:25 [INFO]   pair_num=2 actual_cm=None spec_code=A1 source=never
+2026-02-26 20:57:25 [INFO]   pair_num=3 actual_cm=None spec_code=B1 source=never
+2026-02-26 20:57:25 [INFO]   pair_num=4 actual_cm=None spec_code=L1 source=never
+2026-02-26 20:57:25 [INFO]   pair_num=5 actual_cm=None spec_code=D2 source=never
+2026-02-26 20:57:25 [INFO]   pair_num=6 actual_cm=None spec_code=F2 source=never
+2026-02-26 20:57:25 [INFO]   pair_num=7 actual_cm=None spec_code=G1 source=never
+2026-02-26 20:57:25 [INFO]   pair_num=8 actual_cm=None spec_code=H1 source=never
+2026-02-26 20:57:25 [INFO]   pair_num=9 actual_cm=None spec_code=E2 source=never
+2026-02-26 20:57:25 [INFO]   pair_num=10 actual_cm=None spec_code=E3 source=never
+2026-02-26 20:57:25 [INFO]   pair_num=11 actual_cm=None spec_code=P2 source=never
+2026-02-26 20:57:25 [INFO]   pair_num=12 actual_cm=None spec_code=P3 source=never
+2026-02-26 20:57:25 [INFO]   pair_num=13 actual_cm=None spec_code=O3 source=never
+2026-02-26 20:57:26 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:57:27 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:57:29 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:57:31 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:57:33 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:57:35 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:57:37 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:57:39 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:57:41 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:57:43 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:57:45 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:57:47 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:57:49 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:57:51 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:57:53 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:28 [INFO] ============================================================
+2026-02-26 20:58:28 [INFO] Logger initialised  -  measurement  ->  C:\Users\ASAD\AppData\Roaming\operatorpannel\logs\measurement.log
+2026-02-26 20:58:28 [INFO] ============================================================
+2026-02-26 20:58:29 [INFO] [START] Worker for article: KES, size: S (front)
+2026-02-26 20:58:29 [INFO] [PATH] Annotation JSON: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.json
+2026-02-26 20:58:29 [INFO] [PATH] Reference Image: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.jpg
+2026-02-26 20:58:29 [INFO] [PATH] Results: C:\Users\ASAD\AppData\Roaming\operatorpannel\storage\measurement_results
+2026-02-26 20:58:29 [INFO] [MODE] Garment Color: other
+2026-02-26 20:58:29 [INFO] [SPECS] Received 13 measurement specs from UI:
+2026-02-26 20:58:29 [INFO]   Pair 1 -> J1: Overarm crown to cuff (expected: 20 cm, db_id: 85)
+2026-02-26 20:58:29 [INFO]   Pair 2 -> A1: Chest width 2.5cm below underarm (expected: 48 cm, db_id: 93)
+2026-02-26 20:58:29 [INFO]   Pair 3 -> B1: CB length excl neckband (expected: 62 cm, db_id: 94)
+2026-02-26 20:58:29 [INFO]   Pair 4 -> L1: Cuff width (expected: 17.5 cm, db_id: 95)
+2026-02-26 20:58:29 [INFO]   Pair 5 -> D2: Hem width (expected: 48 cm, db_id: 96)
+2026-02-26 20:58:29 [INFO]   Pair 6 -> F2: Back neck width seam to seam (expected: 18 cm, db_id: 97)
+2026-02-26 20:58:29 [INFO]   Pair 7 -> G1: Shoulder Length (expected: 16.5 cm, db_id: 98)
+2026-02-26 20:58:29 [INFO]   Pair 8 -> H1: Bicep width - 2.5cm from armhole (expected: 19.25 cm, db_id: 99)
+2026-02-26 20:58:29 [INFO]   Pair 9 -> E2: CB collar depth (expected: 7 cm, db_id: 100)
+2026-02-26 20:58:29 [INFO]   Pair 10 -> E3: Collar point depth (expected: 6 cm, db_id: 101)
+2026-02-26 20:58:29 [INFO]   Pair 11 -> P2: Planket width (expected: 3 cm, db_id: 102)
+2026-02-26 20:58:29 [INFO]   Pair 12 -> P3: Planket length (expected: 12 cm, db_id: 103)
+2026-02-26 20:58:29 [INFO]   Pair 13 -> O3: Half neck (expected: 22.25 cm, db_id: 104)
+2026-02-26 20:58:29 [INFO] [CHECK] Reference image: 1340724 bytes, header(hex): ffd8ffe000104a464946000101000001
+2026-02-26 20:58:29 [INFO] [CHECK] Valid JPEG header detected
+2026-02-26 20:58:29 [INFO] [API] Garment color set to: other
+2026-02-26 20:58:29 [INFO] [LIVE] Will write live_measurements.json to: C:\Users\ASAD\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json
+2026-02-26 20:58:29 [INFO] Found 1 camera(s)
+2026-02-26 20:58:29 [INFO] Camera opened successfully: Camera MV-SUA2000C#0001-0019
+2026-02-26 20:58:29 [INFO] 📷 Camera mode: MONOCHROME (for faster processing)
+2026-02-26 20:58:29 [INFO] Camera initialized successfully
+2026-02-26 20:58:29 [INFO] [HEADLESS] Skipping interactive garment color prompt
+2026-02-26 20:58:29 [INFO] 🎛️ Camera configured: Gain 64, Auto Exposure ON (OTHER colors mode)
+2026-02-26 20:58:29 [INFO] ✅ Calibration loaded successfully!
+2026-02-26 20:58:29 [INFO] 📏 Scale factor: 30.44 pixels/cm
+2026-02-26 20:58:29 [INFO] 📐 Reference length: 29.8 cm
+2026-02-26 20:58:29 [INFO] [LOAD] Using annotation file: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.json
+2026-02-26 20:58:29 [INFO] [LOAD] Using reference image: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.jpg
+2026-02-26 20:58:29 [INFO] [FILE] Reference image size: 1340724 bytes
+2026-02-26 20:58:29 [INFO] [COMPAT] Applied legacy type inference: 10 corner, 0 perp, 0 normal
+2026-02-26 20:58:29 [INFO] ✅ Annotation data loaded successfully!
+2026-02-26 20:58:29 [INFO] 📍 Loaded 10 keypoints:
+2026-02-26 20:58:29 [INFO]    - Corner: 10
+2026-02-26 20:58:29 [INFO]    - Perpendicular: 0
+2026-02-26 20:58:29 [INFO]    - Normal: 0
+2026-02-26 20:58:29 [INFO] 🎯 Loaded 5 target distances
+2026-02-26 20:58:29 [INFO] 📦 Loaded placement guide box
+2026-02-26 20:58:29 [INFO] ✅ Reference image loaded: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.jpg
+2026-02-26 20:58:29 [INFO] 📐 Image dimensions: 5456x2700
+2026-02-26 20:58:29 [INFO] ✅ Reference image loaded: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.jpg
+2026-02-26 20:58:29 [INFO] 📐 Image dimensions: 5456x2700
+2026-02-26 20:58:29 [INFO] [COMPAT] Applied legacy type inference (back): 10 corner, 0 perp, 0 normal
+2026-02-26 20:58:29 [INFO] ✅ Back annotation data loaded successfully!
+2026-02-26 20:58:29 [INFO] 📍 Loaded 10 back keypoints:
+2026-02-26 20:58:29 [INFO]    - Corner: 10
+2026-02-26 20:58:29 [INFO]    - Perpendicular: 0
+2026-02-26 20:58:29 [INFO]    - Normal: 0
+2026-02-26 20:58:29 [INFO] 🎯 Loaded 5 back target distances
+2026-02-26 20:58:29 [INFO] 📦 Loaded back placement_box: [1298, 231, 3852, 2257]
+2026-02-26 20:58:29 [INFO] 📁 No back reference image file found
+2026-02-26 20:58:29 [INFO] ❌ Back annotation loaded but reference image missing
+2026-02-26 20:58:30 [INFO] ✅ Back reference image loaded: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.jpg
+2026-02-26 20:58:30 [INFO] 📐 Image dimensions: 5456x2700
+2026-02-26 20:58:30 [INFO] [LIVE] Starting measurement loop (HEADLESS MODE, FULLSCREEN)...
+2026-02-26 20:58:30 [INFO] 
+2026-02-26 20:58:30 [INFO] ============================================================
+2026-02-26 20:58:30 [INFO] STEP 3: LIVE MEASUREMENT - ROBUST KEYPOINT TRACKING
+2026-02-26 20:58:30 [INFO] ============================================================
+2026-02-26 20:58:30 [INFO] Keypoints will now adapt based on their type:
+2026-02-26 20:58:30 [INFO]   CORNER points: Enhanced detection (template + Shi-Tomasi + Harris)
+2026-02-26 20:58:30 [INFO]   PERPENDICULAR points: Static after first successful match
+2026-02-26 20:58:30 [INFO]   NORMAL points: Basic feature matching
+2026-02-26 20:58:30 [INFO] PAUSE FUNCTION + MOUSE PAN/ZOOM!
+2026-02-26 20:58:30 [INFO] B KEY: Switch between FRONT and BACK sides!
+2026-02-26 20:58:30 [INFO] 🎛️ Gain set to 64, Auto Exposure ON for OTHER colors (live measurement)
+2026-02-26 20:58:30 [INFO] [HEADLESS] Starting live measurement automatically...
+2026-02-26 20:58:30 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:30 [INFO] [PATH] Authoritative results path: C:\Users\ASAD\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json
+2026-02-26 20:58:30 [INFO] [LIVE] Write path: C:\Users\ASAD\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json | side=front
+2026-02-26 20:58:30 [INFO]   pair_num=1 actual_cm=None spec_code=J1 source=never
+2026-02-26 20:58:30 [INFO]   pair_num=2 actual_cm=None spec_code=A1 source=never
+2026-02-26 20:58:30 [INFO]   pair_num=3 actual_cm=None spec_code=B1 source=never
+2026-02-26 20:58:30 [INFO]   pair_num=4 actual_cm=None spec_code=L1 source=never
+2026-02-26 20:58:30 [INFO]   pair_num=5 actual_cm=None spec_code=D2 source=never
+2026-02-26 20:58:30 [INFO]   pair_num=6 actual_cm=None spec_code=F2 source=never
+2026-02-26 20:58:30 [INFO]   pair_num=7 actual_cm=None spec_code=G1 source=never
+2026-02-26 20:58:30 [INFO]   pair_num=8 actual_cm=None spec_code=H1 source=never
+2026-02-26 20:58:30 [INFO]   pair_num=9 actual_cm=None spec_code=E2 source=never
+2026-02-26 20:58:30 [INFO]   pair_num=10 actual_cm=None spec_code=E3 source=never
+2026-02-26 20:58:30 [INFO]   pair_num=11 actual_cm=None spec_code=P2 source=never
+2026-02-26 20:58:30 [INFO]   pair_num=12 actual_cm=None spec_code=P3 source=never
+2026-02-26 20:58:30 [INFO]   pair_num=13 actual_cm=None spec_code=O3 source=never
+2026-02-26 20:58:30 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:31 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:31 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:31 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:31 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:32 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:32 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:33 [INFO] ============================================================
+2026-02-26 20:58:33 [INFO] Logger initialised  -  measurement  ->  C:\Users\ASAD\AppData\Roaming\operatorpannel\logs\measurement.log
+2026-02-26 20:58:33 [INFO] ============================================================
+2026-02-26 20:58:33 [INFO] [START] Worker for article: KES, size: S (front)
+2026-02-26 20:58:33 [INFO] [PATH] Annotation JSON: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.json
+2026-02-26 20:58:33 [INFO] [PATH] Reference Image: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.jpg
+2026-02-26 20:58:33 [INFO] [PATH] Results: C:\Users\ASAD\AppData\Roaming\operatorpannel\storage\measurement_results
+2026-02-26 20:58:33 [INFO] [MODE] Garment Color: other
+2026-02-26 20:58:33 [INFO] [SPECS] Received 13 measurement specs from UI:
+2026-02-26 20:58:33 [INFO]   Pair 1 -> J1: Overarm crown to cuff (expected: 20 cm, db_id: 85)
+2026-02-26 20:58:33 [INFO]   Pair 2 -> A1: Chest width 2.5cm below underarm (expected: 48 cm, db_id: 93)
+2026-02-26 20:58:33 [INFO]   Pair 3 -> B1: CB length excl neckband (expected: 62 cm, db_id: 94)
+2026-02-26 20:58:33 [INFO]   Pair 4 -> L1: Cuff width (expected: 17.5 cm, db_id: 95)
+2026-02-26 20:58:33 [INFO]   Pair 5 -> D2: Hem width (expected: 48 cm, db_id: 96)
+2026-02-26 20:58:33 [INFO]   Pair 6 -> F2: Back neck width seam to seam (expected: 18 cm, db_id: 97)
+2026-02-26 20:58:33 [INFO]   Pair 7 -> G1: Shoulder Length (expected: 16.5 cm, db_id: 98)
+2026-02-26 20:58:33 [INFO]   Pair 8 -> H1: Bicep width - 2.5cm from armhole (expected: 19.25 cm, db_id: 99)
+2026-02-26 20:58:33 [INFO]   Pair 9 -> E2: CB collar depth (expected: 7 cm, db_id: 100)
+2026-02-26 20:58:33 [INFO]   Pair 10 -> E3: Collar point depth (expected: 6 cm, db_id: 101)
+2026-02-26 20:58:33 [INFO]   Pair 11 -> P2: Planket width (expected: 3 cm, db_id: 102)
+2026-02-26 20:58:33 [INFO]   Pair 12 -> P3: Planket length (expected: 12 cm, db_id: 103)
+2026-02-26 20:58:33 [INFO]   Pair 13 -> O3: Half neck (expected: 22.25 cm, db_id: 104)
+2026-02-26 20:58:33 [INFO] [CHECK] Reference image: 1340724 bytes, header(hex): ffd8ffe000104a464946000101000001
+2026-02-26 20:58:33 [INFO] [CHECK] Valid JPEG header detected
+2026-02-26 20:58:33 [INFO] [API] Garment color set to: other
+2026-02-26 20:58:33 [INFO] [LIVE] Will write live_measurements.json to: C:\Users\ASAD\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json
+2026-02-26 20:58:33 [INFO] Found 1 camera(s)
+2026-02-26 20:58:34 [INFO] Camera opened successfully: Camera MV-SUA2000C#0001-0019
+2026-02-26 20:58:34 [INFO] 📷 Camera mode: MONOCHROME (for faster processing)
+2026-02-26 20:58:34 [INFO] Camera initialized successfully
+2026-02-26 20:58:34 [INFO] [HEADLESS] Skipping interactive garment color prompt
+2026-02-26 20:58:34 [INFO] 🎛️ Camera configured: Gain 64, Auto Exposure ON (OTHER colors mode)
+2026-02-26 20:58:34 [INFO] ✅ Calibration loaded successfully!
+2026-02-26 20:58:34 [INFO] 📏 Scale factor: 30.44 pixels/cm
+2026-02-26 20:58:34 [INFO] 📐 Reference length: 29.8 cm
+2026-02-26 20:58:34 [INFO] [LOAD] Using annotation file: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.json
+2026-02-26 20:58:34 [INFO] [LOAD] Using reference image: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.jpg
+2026-02-26 20:58:34 [INFO] [FILE] Reference image size: 1340724 bytes
+2026-02-26 20:58:34 [INFO] [COMPAT] Applied legacy type inference: 10 corner, 0 perp, 0 normal
+2026-02-26 20:58:34 [INFO] ✅ Annotation data loaded successfully!
+2026-02-26 20:58:34 [INFO] 📍 Loaded 10 keypoints:
+2026-02-26 20:58:34 [INFO]    - Corner: 10
+2026-02-26 20:58:34 [INFO]    - Perpendicular: 0
+2026-02-26 20:58:34 [INFO]    - Normal: 0
+2026-02-26 20:58:34 [INFO] 🎯 Loaded 5 target distances
+2026-02-26 20:58:34 [INFO] 📦 Loaded placement guide box
+2026-02-26 20:58:34 [INFO] ✅ Reference image loaded: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.jpg
+2026-02-26 20:58:34 [INFO] 📐 Image dimensions: 5456x2700
+2026-02-26 20:58:34 [INFO] ✅ Reference image loaded: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.jpg
+2026-02-26 20:58:34 [INFO] 📐 Image dimensions: 5456x2700
+2026-02-26 20:58:34 [INFO] [COMPAT] Applied legacy type inference (back): 10 corner, 0 perp, 0 normal
+2026-02-26 20:58:34 [INFO] ✅ Back annotation data loaded successfully!
+2026-02-26 20:58:34 [INFO] 📍 Loaded 10 back keypoints:
+2026-02-26 20:58:34 [INFO]    - Corner: 10
+2026-02-26 20:58:34 [INFO]    - Perpendicular: 0
+2026-02-26 20:58:34 [INFO]    - Normal: 0
+2026-02-26 20:58:34 [INFO] 🎯 Loaded 5 back target distances
+2026-02-26 20:58:34 [INFO] 📦 Loaded back placement_box: [1298, 231, 3852, 2257]
+2026-02-26 20:58:34 [INFO] 📁 No back reference image file found
+2026-02-26 20:58:34 [INFO] ❌ Back annotation loaded but reference image missing
+2026-02-26 20:58:34 [INFO] ✅ Back reference image loaded: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.jpg
+2026-02-26 20:58:34 [INFO] 📐 Image dimensions: 5456x2700
+2026-02-26 20:58:34 [INFO] [LIVE] Starting measurement loop (HEADLESS MODE, FULLSCREEN)...
+2026-02-26 20:58:34 [INFO] 
+2026-02-26 20:58:34 [INFO] ============================================================
+2026-02-26 20:58:34 [INFO] STEP 3: LIVE MEASUREMENT - ROBUST KEYPOINT TRACKING
+2026-02-26 20:58:34 [INFO] ============================================================
+2026-02-26 20:58:34 [INFO] Keypoints will now adapt based on their type:
+2026-02-26 20:58:34 [INFO]   CORNER points: Enhanced detection (template + Shi-Tomasi + Harris)
+2026-02-26 20:58:34 [INFO]   PERPENDICULAR points: Static after first successful match
+2026-02-26 20:58:34 [INFO]   NORMAL points: Basic feature matching
+2026-02-26 20:58:34 [INFO] PAUSE FUNCTION + MOUSE PAN/ZOOM!
+2026-02-26 20:58:34 [INFO] B KEY: Switch between FRONT and BACK sides!
+2026-02-26 20:58:34 [INFO] 🎛️ Gain set to 64, Auto Exposure ON for OTHER colors (live measurement)
+2026-02-26 20:58:34 [INFO] [HEADLESS] Starting live measurement automatically...
+2026-02-26 20:58:35 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:35 [INFO] [PATH] Authoritative results path: C:\Users\ASAD\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json
+2026-02-26 20:58:35 [INFO] [LIVE] Write path: C:\Users\ASAD\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json | side=front
+2026-02-26 20:58:35 [INFO]   pair_num=1 actual_cm=None spec_code=J1 source=never
+2026-02-26 20:58:35 [INFO]   pair_num=2 actual_cm=None spec_code=A1 source=never
+2026-02-26 20:58:35 [INFO]   pair_num=3 actual_cm=None spec_code=B1 source=never
+2026-02-26 20:58:35 [INFO]   pair_num=4 actual_cm=None spec_code=L1 source=never
+2026-02-26 20:58:35 [INFO]   pair_num=5 actual_cm=None spec_code=D2 source=never
+2026-02-26 20:58:35 [INFO]   pair_num=6 actual_cm=None spec_code=F2 source=never
+2026-02-26 20:58:35 [INFO]   pair_num=7 actual_cm=None spec_code=G1 source=never
+2026-02-26 20:58:35 [INFO]   pair_num=8 actual_cm=None spec_code=H1 source=never
+2026-02-26 20:58:35 [INFO]   pair_num=9 actual_cm=None spec_code=E2 source=never
+2026-02-26 20:58:35 [INFO]   pair_num=10 actual_cm=None spec_code=E3 source=never
+2026-02-26 20:58:35 [INFO]   pair_num=11 actual_cm=None spec_code=P2 source=never
+2026-02-26 20:58:35 [INFO]   pair_num=12 actual_cm=None spec_code=P3 source=never
+2026-02-26 20:58:35 [INFO]   pair_num=13 actual_cm=None spec_code=O3 source=never
+2026-02-26 20:58:35 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:35 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:35 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:36 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:36 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:36 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:36 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:37 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:37 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:37 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:37 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:38 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:38 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:38 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:38 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:38 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:39 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:39 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:39 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:39 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:40 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:40 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:40 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:40 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:41 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:41 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:41 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:41 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:42 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:42 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:42 [INFO] [LIVE] Write path: C:\Users\ASAD\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json | side=front
+2026-02-26 20:58:42 [INFO]   pair_num=1 actual_cm=None spec_code=J1 source=never
+2026-02-26 20:58:42 [INFO]   pair_num=2 actual_cm=None spec_code=A1 source=never
+2026-02-26 20:58:42 [INFO]   pair_num=3 actual_cm=None spec_code=B1 source=never
+2026-02-26 20:58:42 [INFO]   pair_num=4 actual_cm=None spec_code=L1 source=never
+2026-02-26 20:58:42 [INFO]   pair_num=5 actual_cm=None spec_code=D2 source=never
+2026-02-26 20:58:42 [INFO]   pair_num=6 actual_cm=None spec_code=F2 source=never
+2026-02-26 20:58:42 [INFO]   pair_num=7 actual_cm=None spec_code=G1 source=never
+2026-02-26 20:58:42 [INFO]   pair_num=8 actual_cm=None spec_code=H1 source=never
+2026-02-26 20:58:42 [INFO]   pair_num=9 actual_cm=None spec_code=E2 source=never
+2026-02-26 20:58:42 [INFO]   pair_num=10 actual_cm=None spec_code=E3 source=never
+2026-02-26 20:58:42 [INFO]   pair_num=11 actual_cm=None spec_code=P2 source=never
+2026-02-26 20:58:42 [INFO]   pair_num=12 actual_cm=None spec_code=P3 source=never
+2026-02-26 20:58:42 [INFO]   pair_num=13 actual_cm=None spec_code=O3 source=never
+2026-02-26 20:58:43 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:43 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:43 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:44 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:44 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:45 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:45 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:46 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:46 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 20:58:47 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:04:27 [INFO] ============================================================
+2026-02-26 21:04:27 [INFO] Logger initialised  -  measurement  ->  C:\Users\ASAD\AppData\Roaming\operatorpannel\logs\measurement.log
+2026-02-26 21:04:27 [INFO] ============================================================
+2026-02-26 21:04:57 [INFO] ============================================================
+2026-02-26 21:04:57 [INFO] Logger initialised  -  measurement  ->  C:\Users\ASAD\AppData\Roaming\operatorpannel\logs\measurement.log
+2026-02-26 21:04:57 [INFO] ============================================================
+2026-02-26 21:12:25 [INFO] ============================================================
+2026-02-26 21:12:25 [INFO] Logger initialised  -  measurement  ->  C:\Users\ASAD\AppData\Roaming\operatorpannel\logs\measurement.log
+2026-02-26 21:12:25 [INFO] ============================================================
+2026-02-26 21:12:26 [INFO] [START] Worker for article: KES, size: S (front)
+2026-02-26 21:12:26 [INFO] [PATH] Annotation JSON: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.json
+2026-02-26 21:12:26 [INFO] [PATH] Reference Image: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.jpg
+2026-02-26 21:12:26 [INFO] [PATH] Results: C:\Users\ASAD\AppData\Roaming\operatorpannel\storage\measurement_results
+2026-02-26 21:12:26 [INFO] [MODE] Garment Color: other
+2026-02-26 21:12:26 [INFO] [SPECS] Received 13 measurement specs from UI:
+2026-02-26 21:12:26 [INFO]   Pair 1 -> J1: Overarm crown to cuff (expected: 20 cm, db_id: 85)
+2026-02-26 21:12:26 [INFO]   Pair 2 -> A1: Chest width 2.5cm below underarm (expected: 48 cm, db_id: 93)
+2026-02-26 21:12:26 [INFO]   Pair 3 -> B1: CB length excl neckband (expected: 62 cm, db_id: 94)
+2026-02-26 21:12:26 [INFO]   Pair 4 -> L1: Cuff width (expected: 17.5 cm, db_id: 95)
+2026-02-26 21:12:26 [INFO]   Pair 5 -> D2: Hem width (expected: 48 cm, db_id: 96)
+2026-02-26 21:12:26 [INFO]   Pair 6 -> F2: Back neck width seam to seam (expected: 18 cm, db_id: 97)
+2026-02-26 21:12:26 [INFO]   Pair 7 -> G1: Shoulder Length (expected: 16.5 cm, db_id: 98)
+2026-02-26 21:12:26 [INFO]   Pair 8 -> H1: Bicep width - 2.5cm from armhole (expected: 19.25 cm, db_id: 99)
+2026-02-26 21:12:26 [INFO]   Pair 9 -> E2: CB collar depth (expected: 7 cm, db_id: 100)
+2026-02-26 21:12:26 [INFO]   Pair 10 -> E3: Collar point depth (expected: 6 cm, db_id: 101)
+2026-02-26 21:12:26 [INFO]   Pair 11 -> P2: Planket width (expected: 3 cm, db_id: 102)
+2026-02-26 21:12:26 [INFO]   Pair 12 -> P3: Planket length (expected: 12 cm, db_id: 103)
+2026-02-26 21:12:26 [INFO]   Pair 13 -> O3: Half neck (expected: 22.25 cm, db_id: 104)
+2026-02-26 21:12:26 [INFO] [CHECK] Reference image: 1340724 bytes, header(hex): ffd8ffe000104a464946000101000001
+2026-02-26 21:12:26 [INFO] [CHECK] Valid JPEG header detected
+2026-02-26 21:12:26 [INFO] [API] Garment color set to: other
+2026-02-26 21:12:26 [INFO] [LIVE] Will write live_measurements.json to: C:\Users\ASAD\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json
+2026-02-26 21:12:26 [INFO] No camera found!
+2026-02-26 21:12:26 [INFO] [ERR] No camera found - Could not initialize camera
+2026-02-26 21:12:44 [INFO] ============================================================
+2026-02-26 21:12:44 [INFO] Logger initialised  -  measurement  ->  C:\Users\ASAD\AppData\Roaming\operatorpannel\logs\measurement.log
+2026-02-26 21:12:44 [INFO] ============================================================
+2026-02-26 21:12:45 [INFO] [START] Worker for article: KES, size: S (front)
+2026-02-26 21:12:45 [INFO] [PATH] Annotation JSON: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.json
+2026-02-26 21:12:45 [INFO] [PATH] Reference Image: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.jpg
+2026-02-26 21:12:45 [INFO] [PATH] Results: C:\Users\ASAD\AppData\Roaming\operatorpannel\storage\measurement_results
+2026-02-26 21:12:45 [INFO] [MODE] Garment Color: other
+2026-02-26 21:12:45 [INFO] [SPECS] Received 13 measurement specs from UI:
+2026-02-26 21:12:45 [INFO]   Pair 1 -> J1: Overarm crown to cuff (expected: 20 cm, db_id: 85)
+2026-02-26 21:12:45 [INFO]   Pair 2 -> A1: Chest width 2.5cm below underarm (expected: 48 cm, db_id: 93)
+2026-02-26 21:12:45 [INFO]   Pair 3 -> B1: CB length excl neckband (expected: 62 cm, db_id: 94)
+2026-02-26 21:12:45 [INFO]   Pair 4 -> L1: Cuff width (expected: 17.5 cm, db_id: 95)
+2026-02-26 21:12:45 [INFO]   Pair 5 -> D2: Hem width (expected: 48 cm, db_id: 96)
+2026-02-26 21:12:45 [INFO]   Pair 6 -> F2: Back neck width seam to seam (expected: 18 cm, db_id: 97)
+2026-02-26 21:12:45 [INFO]   Pair 7 -> G1: Shoulder Length (expected: 16.5 cm, db_id: 98)
+2026-02-26 21:12:45 [INFO]   Pair 8 -> H1: Bicep width - 2.5cm from armhole (expected: 19.25 cm, db_id: 99)
+2026-02-26 21:12:45 [INFO]   Pair 9 -> E2: CB collar depth (expected: 7 cm, db_id: 100)
+2026-02-26 21:12:45 [INFO]   Pair 10 -> E3: Collar point depth (expected: 6 cm, db_id: 101)
+2026-02-26 21:12:45 [INFO]   Pair 11 -> P2: Planket width (expected: 3 cm, db_id: 102)
+2026-02-26 21:12:45 [INFO]   Pair 12 -> P3: Planket length (expected: 12 cm, db_id: 103)
+2026-02-26 21:12:45 [INFO]   Pair 13 -> O3: Half neck (expected: 22.25 cm, db_id: 104)
+2026-02-26 21:12:45 [INFO] [CHECK] Reference image: 1340724 bytes, header(hex): ffd8ffe000104a464946000101000001
+2026-02-26 21:12:45 [INFO] [CHECK] Valid JPEG header detected
+2026-02-26 21:12:45 [INFO] [API] Garment color set to: other
+2026-02-26 21:12:45 [INFO] [LIVE] Will write live_measurements.json to: C:\Users\ASAD\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json
+2026-02-26 21:12:45 [INFO] Found 1 camera(s)
+2026-02-26 21:12:45 [INFO] Camera opened successfully: Camera MV-SUA2000C#0001-0019
+2026-02-26 21:12:45 [INFO] 📷 Camera mode: MONOCHROME (for faster processing)
+2026-02-26 21:12:45 [INFO] Camera initialized successfully
+2026-02-26 21:12:45 [INFO] [HEADLESS] Skipping interactive garment color prompt
+2026-02-26 21:12:45 [INFO] 🎛️ Camera configured: Gain 64, Auto Exposure ON (OTHER colors mode)
+2026-02-26 21:12:45 [INFO] ✅ Calibration loaded successfully!
+2026-02-26 21:12:45 [INFO] 📏 Scale factor: 30.44 pixels/cm
+2026-02-26 21:12:45 [INFO] 📐 Reference length: 29.8 cm
+2026-02-26 21:12:45 [INFO] [LOAD] Using annotation file: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.json
+2026-02-26 21:12:45 [INFO] [LOAD] Using reference image: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.jpg
+2026-02-26 21:12:45 [INFO] [FILE] Reference image size: 1340724 bytes
+2026-02-26 21:12:45 [INFO] [COMPAT] Applied legacy type inference: 10 corner, 0 perp, 0 normal
+2026-02-26 21:12:45 [INFO] ✅ Annotation data loaded successfully!
+2026-02-26 21:12:45 [INFO] 📍 Loaded 10 keypoints:
+2026-02-26 21:12:45 [INFO]    - Corner: 10
+2026-02-26 21:12:45 [INFO]    - Perpendicular: 0
+2026-02-26 21:12:45 [INFO]    - Normal: 0
+2026-02-26 21:12:45 [INFO] 🎯 Loaded 5 target distances
+2026-02-26 21:12:45 [INFO] 📦 Loaded placement guide box
+2026-02-26 21:12:46 [INFO] ✅ Reference image loaded: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.jpg
+2026-02-26 21:12:46 [INFO] 📐 Image dimensions: 5456x2700
+2026-02-26 21:12:46 [INFO] ✅ Reference image loaded: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.jpg
+2026-02-26 21:12:46 [INFO] 📐 Image dimensions: 5456x2700
+2026-02-26 21:12:46 [INFO] [COMPAT] Applied legacy type inference (back): 10 corner, 0 perp, 0 normal
+2026-02-26 21:12:46 [INFO] ✅ Back annotation data loaded successfully!
+2026-02-26 21:12:46 [INFO] 📍 Loaded 10 back keypoints:
+2026-02-26 21:12:46 [INFO]    - Corner: 10
+2026-02-26 21:12:46 [INFO]    - Perpendicular: 0
+2026-02-26 21:12:46 [INFO]    - Normal: 0
+2026-02-26 21:12:46 [INFO] 🎯 Loaded 5 back target distances
+2026-02-26 21:12:46 [INFO] 📦 Loaded back placement_box: [1298, 231, 3852, 2257]
+2026-02-26 21:12:46 [INFO] 📁 No back reference image file found
+2026-02-26 21:12:46 [INFO] ❌ Back annotation loaded but reference image missing
+2026-02-26 21:12:46 [INFO] ✅ Back reference image loaded: C:\Users\ASAD\AppData\Roaming\operatorpannel\temp_annotations\KES_S-z.jpg
+2026-02-26 21:12:46 [INFO] 📐 Image dimensions: 5456x2700
+2026-02-26 21:12:46 [INFO] [LIVE] Starting measurement loop (HEADLESS MODE, FULLSCREEN)...
+2026-02-26 21:12:46 [INFO] 
+2026-02-26 21:12:46 [INFO] ============================================================
+2026-02-26 21:12:46 [INFO] STEP 3: LIVE MEASUREMENT - ROBUST KEYPOINT TRACKING
+2026-02-26 21:12:46 [INFO] ============================================================
+2026-02-26 21:12:46 [INFO] Keypoints will now adapt based on their type:
+2026-02-26 21:12:46 [INFO]   CORNER points: Enhanced detection (template + Shi-Tomasi + Harris)
+2026-02-26 21:12:46 [INFO]   PERPENDICULAR points: Static after first successful match
+2026-02-26 21:12:46 [INFO]   NORMAL points: Basic feature matching
+2026-02-26 21:12:46 [INFO] PAUSE FUNCTION + MOUSE PAN/ZOOM!
+2026-02-26 21:12:46 [INFO] B KEY: Switch between FRONT and BACK sides!
+2026-02-26 21:12:46 [INFO] 🎛️ Gain set to 64, Auto Exposure ON for OTHER colors (live measurement)
+2026-02-26 21:12:46 [INFO] [HEADLESS] Starting live measurement automatically...
+2026-02-26 21:12:46 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:12:46 [INFO] [PATH] Authoritative results path: C:\Users\ASAD\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json
+2026-02-26 21:12:46 [INFO] [LIVE] Write path: C:\Users\ASAD\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json | side=front
+2026-02-26 21:12:46 [INFO]   pair_num=1 actual_cm=None spec_code=J1 source=never
+2026-02-26 21:12:46 [INFO]   pair_num=2 actual_cm=None spec_code=A1 source=never
+2026-02-26 21:12:46 [INFO]   pair_num=3 actual_cm=None spec_code=B1 source=never
+2026-02-26 21:12:46 [INFO]   pair_num=4 actual_cm=None spec_code=L1 source=never
+2026-02-26 21:12:46 [INFO]   pair_num=5 actual_cm=None spec_code=D2 source=never
+2026-02-26 21:12:46 [INFO]   pair_num=6 actual_cm=None spec_code=F2 source=never
+2026-02-26 21:12:46 [INFO]   pair_num=7 actual_cm=None spec_code=G1 source=never
+2026-02-26 21:12:46 [INFO]   pair_num=8 actual_cm=None spec_code=H1 source=never
+2026-02-26 21:12:46 [INFO]   pair_num=9 actual_cm=None spec_code=E2 source=never
+2026-02-26 21:12:46 [INFO]   pair_num=10 actual_cm=None spec_code=E3 source=never
+2026-02-26 21:12:46 [INFO]   pair_num=11 actual_cm=None spec_code=P2 source=never
+2026-02-26 21:12:46 [INFO]   pair_num=12 actual_cm=None spec_code=P3 source=never
+2026-02-26 21:12:46 [INFO]   pair_num=13 actual_cm=None spec_code=O3 source=never
+2026-02-26 21:12:47 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:12:47 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:12:48 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:12:49 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:12:50 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:12:52 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:12:54 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:12:55 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:12:57 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:12:59 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:00 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:02 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:04 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:06 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:08 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:09 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:11 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:13 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:15 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:16 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:18 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:20 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:22 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:23 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:25 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:27 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:29 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:31 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:32 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:34 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:34 [INFO] [LIVE] Write path: C:\Users\ASAD\AppData\Roaming\operatorpannel\storage\measurement_results\live_measurements.json | side=front
+2026-02-26 21:13:34 [INFO]   pair_num=1 actual_cm=None spec_code=J1 source=never
+2026-02-26 21:13:34 [INFO]   pair_num=2 actual_cm=None spec_code=A1 source=never
+2026-02-26 21:13:34 [INFO]   pair_num=3 actual_cm=None spec_code=B1 source=never
+2026-02-26 21:13:34 [INFO]   pair_num=4 actual_cm=None spec_code=L1 source=never
+2026-02-26 21:13:34 [INFO]   pair_num=5 actual_cm=None spec_code=D2 source=never
+2026-02-26 21:13:34 [INFO]   pair_num=6 actual_cm=None spec_code=F2 source=never
+2026-02-26 21:13:34 [INFO]   pair_num=7 actual_cm=None spec_code=G1 source=never
+2026-02-26 21:13:34 [INFO]   pair_num=8 actual_cm=None spec_code=H1 source=never
+2026-02-26 21:13:34 [INFO]   pair_num=9 actual_cm=None spec_code=E2 source=never
+2026-02-26 21:13:34 [INFO]   pair_num=10 actual_cm=None spec_code=E3 source=never
+2026-02-26 21:13:34 [INFO]   pair_num=11 actual_cm=None spec_code=P2 source=never
+2026-02-26 21:13:34 [INFO]   pair_num=12 actual_cm=None spec_code=P3 source=never
+2026-02-26 21:13:34 [INFO]   pair_num=13 actual_cm=None spec_code=O3 source=never
+2026-02-26 21:13:36 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:38 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:40 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:40 [INFO] 
+2026-02-26 21:13:40 [INFO] ==================================================
+2026-02-26 21:13:40 [INFO] LIVE FRONT MEASUREMENTS
+2026-02-26 21:13:40 [INFO] ==================================================
+2026-02-26 21:13:40 [INFO] Pair 5: 52.38 cm (Target: 23.0 cm) - ✅ PASS
+2026-02-26 21:13:40 [INFO] ==================================================
+2026-02-26 21:13:41 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:42 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:43 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:44 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:44 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:45 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:46 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:46 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:47 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:48 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:48 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:49 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:49 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:50 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:50 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:51 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:52 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:52 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:53 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:53 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:54 [INFO] 
+2026-02-26 21:13:54 [INFO] ==================================================
+2026-02-26 21:13:54 [INFO] LIVE FRONT MEASUREMENTS
+2026-02-26 21:13:54 [INFO] ==================================================
+2026-02-26 21:13:54 [INFO] Pair 1: 18.35 cm (Target: 22.0 cm) - ✅ PASS
+2026-02-26 21:13:54 [INFO] Pair 2: 40.95 cm (Target: 43.0 cm) - ✅ PASS
+2026-02-26 21:13:54 [INFO] Pair 3: 65.06 cm (Target: 32.0 cm) - ✅ PASS
+2026-02-26 21:13:54 [INFO] Pair 5: 42.06 cm (Target: 23.0 cm) - ✅ PASS
+2026-02-26 21:13:54 [INFO] ==================================================
+2026-02-26 21:13:55 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:55 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:56 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64
+2026-02-26 21:13:57 [INFO] Error in robust keypoint transfer: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 32 and the array at index 1 has size 64

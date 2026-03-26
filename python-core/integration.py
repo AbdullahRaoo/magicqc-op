@@ -826,22 +826,44 @@ class LiveKeypointDistanceMeasurer:
             
         all_keypoints = []
         all_descriptors = []
+        accepted_desc_width = None
+
+        def _append_feature_set(kps, desc, detector_name):
+            """Append detector outputs only when descriptor width is compatible.
+            Prevents ORB(32) + BRISK(64) concatenation crashes while keeping
+            keypoints and descriptors index-aligned."""
+            nonlocal accepted_desc_width
+            if kps is None or desc is None or len(kps) == 0 or len(desc) == 0:
+                return
+            if len(kps) != len(desc):
+                print(f"[WARN] {detector_name} produced mismatched kp/desc lengths: {len(kps)} vs {len(desc)}")
+                return
+
+            current_width = desc.shape[1] if len(desc.shape) > 1 else 0
+            if current_width <= 0:
+                return
+
+            if accepted_desc_width is None:
+                accepted_desc_width = current_width
+            elif current_width != accepted_desc_width:
+                # Root cause seen in production logs: ORB=32, BRISK=64
+                print(f"[INFO] Skipping {detector_name} descriptors width={current_width}; expected {accepted_desc_width}")
+                return
+
+            all_keypoints.extend(kps)
+            all_descriptors.append(desc)
         
         # ORB features - primary for speed
         try:
             kp_orb, desc_orb = self.feature_detectors['orb'].detectAndCompute(image_resized, None)
-            if kp_orb is not None and desc_orb is not None:
-                all_keypoints.extend(kp_orb)
-                all_descriptors.append(desc_orb)
+            _append_feature_set(kp_orb, desc_orb, 'ORB')
         except Exception as e:
             print(f"ORB feature extraction failed: {e}")
         
         # BRISK features - secondary
         try:
             kp_brisk, desc_brisk = self.feature_detectors['brisk'].detectAndCompute(image_resized, None)
-            if kp_brisk is not None and desc_brisk is not None:
-                all_keypoints.extend(kp_brisk)
-                all_descriptors.append(desc_brisk)
+            _append_feature_set(kp_brisk, desc_brisk, 'BRISK')
         except Exception as e:
             print(f"BRISK feature extraction failed: {e}")
         

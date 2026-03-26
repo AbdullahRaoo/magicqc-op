@@ -1,9 +1,691 @@
 
-[2026-02-26T12:36:01.785160] FATAL CRASH
+[2026-02-22T21:27:41.145043] FATAL CRASH
 Traceback (most recent call last):
-  File "core_main.py", line 1558, in <module>
-  File "core_main.py", line 1551, in main
-  File "core_main.py", line 68, in _dispatch_worker
-  File "calibration_worker.py", line 552, in main
-  File "calibration_worker.py", line 328, in run_calibration
-EOFError: EOF when reading a line
+  File "core_main.py", line 1506, in <module>
+  File "core_main.py", line 1501, in main
+  File "core_main.py", line 90, in run_api_server
+  File "worker_logger.py", line 29, in init worker_logger
+  File "<frozen os>", line 227, in makedirs
+PermissionError: [WinError 5] Access is denied: 'C:\\Program Files\\MagicQC\\resources\\python-core\\dist\\logs'
+
+[2026-02-22T21:27:48.390269] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1506, in <module>
+  File "core_main.py", line 1501, in main
+  File "core_main.py", line 90, in run_api_server
+  File "worker_logger.py", line 29, in init worker_logger
+  File "<frozen os>", line 227, in makedirs
+PermissionError: [WinError 5] Access is denied: 'C:\\Program Files\\MagicQC\\resources\\python-core\\dist\\logs'
+
+[2026-02-22T21:27:55.247820] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1506, in <module>
+  File "core_main.py", line 1501, in main
+  File "core_main.py", line 90, in run_api_server
+  File "worker_logger.py", line 29, in init worker_logger
+  File "<frozen os>", line 227, in makedirs
+PermissionError: [WinError 5] Access is denied: 'C:\\Program Files\\MagicQC\\resources\\python-core\\dist\\logs'
+
+[2026-02-22T21:28:02.426842] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1506, in <module>
+  File "core_main.py", line 1501, in main
+  File "core_main.py", line 90, in run_api_server
+  File "worker_logger.py", line 29, in init worker_logger
+  File "<frozen os>", line 227, in makedirs
+PermissionError: [WinError 5] Access is denied: 'C:\\Program Files\\MagicQC\\resources\\python-core\\dist\\logs'
+
+[2026-02-22T21:28:09.321798] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1506, in <module>
+  File "core_main.py", line 1501, in main
+  File "core_main.py", line 90, in run_api_server
+  File "worker_logger.py", line 29, in init worker_logger
+  File "<frozen os>", line 227, in makedirs
+PermissionError: [WinError 5] Access is denied: 'C:\\Program Files\\MagicQC\\resources\\python-core\\dist\\logs'
+
+[2026-02-22T21:28:16.029478] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1506, in <module>
+  File "core_main.py", line 1501, in main
+  File "core_main.py", line 90, in run_api_server
+  File "worker_logger.py", line 29, in init worker_logger
+  File "<frozen os>", line 227, in makedirs
+PermissionError: [WinError 5] Access is denied: 'C:\\Program Files\\MagicQC\\resources\\python-core\\dist\\logs'
+
+[2026-02-23T11:43:52.839776] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1506, in <module>
+  File "core_main.py", line 1501, in main
+  File "core_main.py", line 90, in run_api_server
+  File "worker_logger.py", line 29, in init worker_logger
+  File "<frozen os>", line 227, in makedirs
+PermissionError: [WinError 5] Access is denied: 'C:\\Program Files\\MagicQC\\resources\\python-core\\dist\\logs'
+
+[2026-02-23T11:43:59.506070] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1506, in <module>
+  File "core_main.py", line 1501, in main
+  File "core_main.py", line 90, in run_api_server
+  File "worker_logger.py", line 29, in init worker_logger
+  File "<frozen os>", line 227, in makedirs
+PermissionError: [WinError 5] Access is denied: 'C:\\Program Files\\MagicQC\\resources\\python-core\\dist\\logs'
+
+[2026-02-23T11:44:07.227276] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1506, in <module>
+  File "core_main.py", line 1501, in main
+  File "core_main.py", line 90, in run_api_server
+  File "worker_logger.py", line 29, in init worker_logger
+  File "<frozen os>", line 227, in makedirs
+PermissionError: [WinError 5] Access is denied: 'C:\\Program Files\\MagicQC\\resources\\python-core\\dist\\logs'
+
+[2026-02-23T11:44:14.684159] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1506, in <module>
+  File "core_main.py", line 1501, in main
+  File "core_main.py", line 90, in run_api_server
+  File "worker_logger.py", line 29, in init worker_logger
+  File "<frozen os>", line 227, in makedirs
+PermissionError: [WinError 5] Access is denied: 'C:\\Program Files\\MagicQC\\resources\\python-core\\dist\\logs'
+
+[2026-02-23T11:44:22.635490] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1506, in <module>
+  File "core_main.py", line 1501, in main
+  File "core_main.py", line 90, in run_api_server
+  File "worker_logger.py", line 29, in init worker_logger
+  File "<frozen os>", line 227, in makedirs
+PermissionError: [WinError 5] Access is denied: 'C:\\Program Files\\MagicQC\\resources\\python-core\\dist\\logs'
+
+[2026-02-23T11:44:31.751495] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1506, in <module>
+  File "core_main.py", line 1501, in main
+  File "core_main.py", line 90, in run_api_server
+  File "worker_logger.py", line 29, in init worker_logger
+  File "<frozen os>", line 227, in makedirs
+PermissionError: [WinError 5] Access is denied: 'C:\\Program Files\\MagicQC\\resources\\python-core\\dist\\logs'
+
+[2026-02-24T10:44:18.409482] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1506, in <module>
+  File "core_main.py", line 1501, in main
+  File "core_main.py", line 90, in run_api_server
+  File "worker_logger.py", line 29, in init worker_logger
+  File "<frozen os>", line 227, in makedirs
+PermissionError: [WinError 5] Access is denied: 'C:\\Program Files\\MagicQC\\resources\\python-core\\dist\\logs'
+
+[2026-02-25T21:46:11.202694] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1506, in <module>
+  File "core_main.py", line 1501, in main
+  File "core_main.py", line 90, in run_api_server
+  File "worker_logger.py", line 29, in init worker_logger
+  File "<frozen os>", line 227, in makedirs
+PermissionError: [WinError 5] Access is denied: 'C:\\Program Files\\MagicQC\\resources\\python-core\\dist\\logs'
+
+[2026-02-25T21:46:19.231535] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1506, in <module>
+  File "core_main.py", line 1501, in main
+  File "core_main.py", line 90, in run_api_server
+  File "worker_logger.py", line 29, in init worker_logger
+  File "<frozen os>", line 227, in makedirs
+PermissionError: [WinError 5] Access is denied: 'C:\\Program Files\\MagicQC\\resources\\python-core\\dist\\logs'
+
+[2026-02-25T21:46:28.158056] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1506, in <module>
+  File "core_main.py", line 1501, in main
+  File "core_main.py", line 90, in run_api_server
+  File "worker_logger.py", line 29, in init worker_logger
+  File "<frozen os>", line 227, in makedirs
+PermissionError: [WinError 5] Access is denied: 'C:\\Program Files\\MagicQC\\resources\\python-core\\dist\\logs'
+
+[2026-02-25T21:46:36.939212] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1506, in <module>
+  File "core_main.py", line 1501, in main
+  File "core_main.py", line 90, in run_api_server
+  File "worker_logger.py", line 29, in init worker_logger
+  File "<frozen os>", line 227, in makedirs
+PermissionError: [WinError 5] Access is denied: 'C:\\Program Files\\MagicQC\\resources\\python-core\\dist\\logs'
+
+[2026-02-25T21:46:44.829099] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1506, in <module>
+  File "core_main.py", line 1501, in main
+  File "core_main.py", line 90, in run_api_server
+  File "worker_logger.py", line 29, in init worker_logger
+  File "<frozen os>", line 227, in makedirs
+PermissionError: [WinError 5] Access is denied: 'C:\\Program Files\\MagicQC\\resources\\python-core\\dist\\logs'
+
+[2026-02-25T21:46:51.949769] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1506, in <module>
+  File "core_main.py", line 1501, in main
+  File "core_main.py", line 90, in run_api_server
+  File "worker_logger.py", line 29, in init worker_logger
+  File "<frozen os>", line 227, in makedirs
+PermissionError: [WinError 5] Access is denied: 'C:\\Program Files\\MagicQC\\resources\\python-core\\dist\\logs'
+
+[2026-02-26T21:04:27.563921] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1570, in <module>
+  File "core_main.py", line 1563, in main
+  File "core_main.py", line 62, in _dispatch_worker
+  File "measurement_worker.py", line 41, in init measurement_worker
+  File "integration.py", line 15, in init integration
+  File "scipy\__init__.py", line 146, in __getattr__
+  File "importlib\__init__.py", line 126, in import_module
+  File "pyimod02_importers.py", line 457, in exec_module
+  File "scipy\ndimage\__init__.py", line 156, in <module>
+  File "pyimod02_importers.py", line 457, in exec_module
+  File "scipy\ndimage\_support_alternative_backends.py", line 2, in <module>
+  File "pyimod02_importers.py", line 457, in exec_module
+  File "scipy\_lib\_array_api.py", line 18, in <module>
+  File "pyimod02_importers.py", line 457, in exec_module
+  File "scipy\_lib\array_api_compat\numpy\__init__.py", line 1, in <module>
+  File "numpy\__init__.py", line 368, in __getattr__
+  File "pyimod02_importers.py", line 457, in exec_module
+  File "numpy\testing\__init__.py", line 8, in <module>
+ModuleNotFoundError: No module named 'unittest'
+
+[2026-02-26T21:04:57.861744] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1570, in <module>
+  File "core_main.py", line 1563, in main
+  File "core_main.py", line 62, in _dispatch_worker
+  File "measurement_worker.py", line 41, in init measurement_worker
+  File "integration.py", line 15, in init integration
+  File "scipy\__init__.py", line 146, in __getattr__
+  File "importlib\__init__.py", line 126, in import_module
+  File "pyimod02_importers.py", line 457, in exec_module
+  File "scipy\ndimage\__init__.py", line 156, in <module>
+  File "pyimod02_importers.py", line 457, in exec_module
+  File "scipy\ndimage\_support_alternative_backends.py", line 2, in <module>
+  File "pyimod02_importers.py", line 457, in exec_module
+  File "scipy\_lib\_array_api.py", line 18, in <module>
+  File "pyimod02_importers.py", line 457, in exec_module
+  File "scipy\_lib\array_api_compat\numpy\__init__.py", line 1, in <module>
+  File "numpy\__init__.py", line 368, in __getattr__
+  File "pyimod02_importers.py", line 457, in exec_module
+  File "numpy\testing\__init__.py", line 8, in <module>
+ModuleNotFoundError: No module named 'unittest'
+
+[2026-03-17T22:08:12.566506] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-17T22:08:16.069135] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-17T22:08:19.552201] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-17T22:08:23.029622] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-17T22:08:26.544589] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-17T22:08:30.023202] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-17T22:08:45.300907] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-17T22:08:56.169480] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-17T22:08:59.658577] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-17T22:09:03.231205] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-17T22:09:06.747521] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-17T22:09:10.264647] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-17T22:09:13.828614] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-17T22:09:30.644376] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-17T22:09:41.377758] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:54:43.170417] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:54:46.935075] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:54:50.694450] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:54:54.388559] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:54:58.167028] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:55:01.939406] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:58:16.830912] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:58:20.635299] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:58:24.336700] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:58:28.159806] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:58:36.496845] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:58:40.295238] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:58:43.995862] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:58:47.702739] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:58:51.460352] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:58:55.209346] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:59:26.692262] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:59:30.460692] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:59:34.303067] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:59:38.079702] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:59:41.827679] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:59:51.267620] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:59:55.047494] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T08:59:58.816585] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T09:00:02.577511] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T09:00:06.307795] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T13:16:24.982976] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T13:16:28.488497] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T13:16:31.991332] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T13:16:35.509005] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-25T13:16:38.999244] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-26T10:47:38.714211] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-26T10:47:42.195273] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-26T10:47:45.643438] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-26T10:47:49.157315] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-26T10:47:52.679369] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-26T10:47:56.193923] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-26T10:48:11.513562] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-26T10:48:27.638061] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-26T10:48:35.547562] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-26T10:49:31.560109] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-26T10:51:50.775399] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-26T10:51:52.926232] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-26T10:51:53.465639] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-26T10:55:48.223947] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-26T10:55:50.595296] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-26T10:55:51.093578] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-26T10:55:51.300389] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-26T10:55:51.472983] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-26T10:56:21.127484] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-26T10:56:21.770263] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-26T10:56:43.710310] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
+
+[2026-03-26T10:56:53.396051] FATAL CRASH
+Traceback (most recent call last):
+  File "core_main.py", line 1671, in <module>
+  File "core_main.py", line 1666, in main
+  File "core_main.py", line 258, in run_api_server
+AttributeError: module 'cv2' has no attribute '__version__'
